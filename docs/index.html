@@ -165,13 +165,13 @@
         }
       };
 
-      fetch('./summary.json')
+      fetch('https://zhanming-wang.github.io/community-laundry-analysis/summary.json')
         .then(function(res) { return res.ok ? res.json() : Promise.reject(new Error('Failed to load data')); })
         .then(function(summary) {
           loading.style.display = 'none';
           content.style.display = 'block';
 
-          const cur = summary.current;
+          const cur = summary.current || {};
           document.getElementById('washers-free').textContent = cur.washers_free;
           document.getElementById('washers-in-use').textContent = cur.washers_in_use;
           document.getElementById('dryers-free').textContent = cur.dryers_free;
@@ -201,6 +201,7 @@
           });
         })
         .catch(function(err) {
+          console.error('Failed to load summary.json:', err);
           showError('Could not load summary: ' + (err.message || 'Unknown error'));
         });
     })();
