@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laundry Room Availability</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #1a1b26;
+      --surface: #24283b;
+      --text: #c0caf5;
+      --text-muted: #565f89;
+      --green: #9ece6a;
+      --red: #f7768e;
+      --accent: #7aa2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0 0 1.5rem 0;
+      color: var(--text);
+    }
+    .card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .status-card {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      max-width: 480px;
+    }
+    @media (max-width: 400px) {
+      .status-card { grid-template-columns: 1fr; }
+    }
+    .status-card h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem 0;
+      grid-column: 1 / -1;
+    }
+    .machine-block {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      background: rgba(0,0,0,0.2);
+    }
+    .machine-block .label { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .machine-block .counts { font-size: 1.25rem; font-weight: 600; }
+    .machine-block .free { color: var(--green); }
+    .machine-block .in-use { color: var(--red); }
+    .chart-container {
+      position: relative;
+      height: 220px;
+      margin-top: 0.5rem;
+    }
+    .chart-card h3 {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem 0;
+    }
+    .last-updated {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2rem;
+      text-align: center;
+    }
+    .loading, .error {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+    }
+    .error { color: var(--red); }
+  </style>
+</head>
+<body>
+  <h1>Laundry Room Availability</h1>
+
+  <div id="app">
+    <div class="loading" id="loading">Loading…</div>
+    <div id="content" style="display: none;">
+      <div class="card status-card">
+        <h2>Right now</h2>
+        <div class="machine-block" id="washers-block">
+          <div class="label">Washers</div>
+          <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
+        </div>
+        <div class="machine-block" id="dryers-block">
+          <div class="label">Dryers</div>
+          <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Average machines in use by hour (0–23)</h3>
+        <div class="chart-container"><canvas id="barChart"></canvas></div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Machines in use over last 7 days</h3>
+        <div class="chart-container"><canvas id="lineChart"></canvas></div>
+      </div>
+
+      <div class="last-updated" id="last-updated"></div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const loading = document.getElementById('loading');
+      const content = document.getElementById('content');
+
+      function showError(msg) {
+        loading.style.display = 'none';
+        loading.outerHTML = '<div class="error" id="loading">' + msg + '</div>';
+      }
+
+      function avgByHour(history) {
+        const byHour = {};
+        for (let h = 0; h < 24; h++) byHour[h] = { sum: 0, n: 0 };
+        history.forEach(function(r) {
+          const h = parseInt(r.hour_pst, 10);
+          if (byHour[h] !== undefined) {
+            byHour[h].sum += r.all_in_use;
+            byHour[h].n += 1;
+          }
+        });
+        const labels = [];
+        const data = [];
+        for (let h = 0; h < 24; h++) {
+          labels.push(h + ':00');
+          data.push(byHour[h].n > 0 ? Math.round(byHour[h].sum / byHour[h].n * 10) / 10 : 0);
+        }
+        return { labels, data };
+      }
+
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(192, 202, 245, 0.1)' },
+            ticks: { color: '#565f89', maxTicksLimit: 12 }
+          },
+          y: {
+            grid: { color: 'rgba(192, 202, 245, 0.1)' },
+            ticks: { color: '#565f89' }
+          }
+        }
+      };
+
+      fetch('./summary.json')
+        .then(function(res) { return res.ok ? res.json() : Promise.reject(new Error('Failed to load data')); })
+        .then(function(summary) {
+          loading.style.display = 'none';
+          content.style.display = 'block';
+
+          const cur = summary.current;
+          document.getElementById('washers-free').textContent = cur.washers_free;
+          document.getElementById('washers-in-use').textContent = cur.washers_in_use;
+          document.getElementById('dryers-free').textContent = cur.dryers_free;
+          document.getElementById('dryers-in-use').textContent = cur.dryers_in_use;
+          document.getElementById('last-updated').textContent = 'Last updated: ' + summary.last_updated;
+
+          const history = summary.history || [];
+          const hourData = avgByHour(history);
+          new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: {
+              labels: hourData.labels,
+              datasets: [{ label: 'Avg in use', data: hourData.data, backgroundColor: 'rgba(122, 162, 247, 0.6)' }]
+            },
+            options: chartOptions
+          });
+
+          const tsLabels = history.map(function(r) { return r.timestamp; });
+          const inUseData = history.map(function(r) { return r.all_in_use; });
+          new Chart(document.getElementById('lineChart'), {
+            type: 'line',
+            data: {
+              labels: tsLabels,
+              datasets: [{ label: 'In use', data: inUseData, borderColor: '#7aa2f7', backgroundColor: 'rgba(122, 162, 247, 0.1)', fill: true, tension: 0.2 }]
+            },
+            options: chartOptions
+          });
+        })
+        .catch(function(err) {
+          showError('Could not load summary: ' + (err.message || 'Unknown error'));
+        });
+    })();
+  </script>
+</body>
+</html>
