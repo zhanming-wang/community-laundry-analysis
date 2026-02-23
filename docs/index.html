@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>[CLASSIFIED] Asset Status</title>
+  <title>Laundry Room Availability</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -52,7 +52,6 @@
       padding-bottom: 0.75rem;
       margin-bottom: 1.25rem;
     }
-    .header .tag { color: var(--text-dim); font-size: 0.7rem; letter-spacing: 0.15em; }
     .header h1 { font-size: 1rem; font-weight: 500; margin: 0.25rem 0 0 0; }
     .card {
       background: var(--surface);
@@ -83,6 +82,7 @@
       background: rgba(0, 30, 0, 0.2);
     }
     .machine-block .label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+    .machine-block .status-pct { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; }
     .machine-block .counts { font-size: 1.1rem; font-weight: 500; }
     .machine-block .free { color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 65, 0.5); }
     .machine-block .in-use { color: var(--red); }
@@ -137,37 +137,38 @@
 </head>
 <body>
   <div class="header">
-    <div class="tag">[ RESTRICTED ]</div>
-    <h1>LAUNDRY ROOM ASSET STATUS</h1>
+    <h1>Laundry Room Availability</h1>
   </div>
 
   <div id="app">
-    <div class="loading" id="loading">CONNECTING...</div>
+    <div class="loading" id="loading">Loading…</div>
     <div id="content" style="display: none;">
       <div class="card status-card">
-        <h2>LIVE_STATUS</h2>
+        <h2>Right now</h2>
         <div class="machine-block" id="washers-block">
-          <div class="label">WASHERS</div>
+          <div class="label">Washers</div>
           <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
+          <div class="status-pct" id="washers-pct"></div>
         </div>
         <div class="machine-block" id="dryers-block">
-          <div class="label">DRYERS</div>
+          <div class="label">Dryers</div>
           <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
+          <div class="status-pct" id="dryers-pct"></div>
         </div>
       </div>
 
       <div class="card chart-card">
-        <h3>AVG_UTILIZATION_BY_HOUR</h3>
+        <h3>Average Utilization by Hour</h3>
         <div class="chart-container"><canvas id="barChart"></canvas></div>
       </div>
 
       <div class="card chart-card">
-        <h3>UTILIZATION_7D_LOG</h3>
+        <h3>Utilization — Last 7 Days</h3>
         <div class="chart-container"><canvas id="lineChart"></canvas></div>
       </div>
 
       <div class="card" id="recommender-section">
-        <h3 style="margin:0 0 1rem 0;">OPTIMAL_WINDOW_TODAY</h3>
+        <h3 style="margin:0 0 1rem 0;">Best Time to Do Laundry Today</h3>
         <div id="recommender-callout" class="recommender-callout"></div>
         <div id="recommender-chart-container" class="chart-container" style="display:none;">
           <canvas id="recommenderChart"></canvas>
@@ -190,23 +191,32 @@
         loading.outerHTML = '<div class="error" id="loading">' + msg + '</div>';
       }
 
-      function avgByHour(history) {
+      function formatHour(h) {
+        if (h === 0) return '12am';
+        if (h < 12) return h + 'am';
+        if (h === 12) return '12pm';
+        return (h - 12) + 'pm';
+      }
+      function avgUtilByHour(history) {
         const byHour = {};
         for (let h = 0; h < 24; h++) byHour[h] = { sum: 0, n: 0 };
         history.forEach(function(r) {
           const h = parseInt(r.hour_pst, 10);
+          const util = r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
           if (byHour[h] !== undefined) {
-            byHour[h].sum += r.all_in_use;
+            byHour[h].sum += util;
             byHour[h].n += 1;
           }
         });
         const labels = [];
         const data = [];
+        const samples = [];
         for (let h = 0; h < 24; h++) {
-          labels.push(h + ':00');
+          labels.push(formatHour(h));
           data.push(byHour[h].n > 0 ? Math.round(byHour[h].sum / byHour[h].n * 10) / 10 : 0);
+          samples.push(byHour[h].n);
         }
-        return { labels, data };
+        return { labels, data, samples };
       }
 
       const chartOptions = {
@@ -238,28 +248,82 @@
           document.getElementById('washers-in-use').textContent = cur.washers_in_use;
           document.getElementById('dryers-free').textContent = cur.dryers_free;
           document.getElementById('dryers-in-use').textContent = cur.dryers_in_use;
-          document.getElementById('last-updated').textContent = 'LAST_POLL: ' + summary.last_updated;
+          document.getElementById('last-updated').textContent = 'Last updated: ' + summary.last_updated;
+          var wp = document.getElementById('washers-pct');
+          var dp = document.getElementById('dryers-pct');
+          wp.textContent = (cur.washer_utilization !== undefined && cur.washer_utilization !== null ? cur.washer_utilization + '% utilized' : '');
+          dp.textContent = (cur.dryer_utilization !== undefined && cur.dryer_utilization !== null ? cur.dryer_utilization + '% utilized' : '');
 
           const history = summary.history || [];
-          const hourData = avgByHour(history);
+          const hourData = avgUtilByHour(history);
           new Chart(document.getElementById('barChart'), {
             type: 'bar',
             data: {
               labels: hourData.labels,
-              datasets: [{ label: 'Avg in use', data: hourData.data, backgroundColor: 'rgba(0, 255, 65, 0.4)' }]
+              datasets: [{
+                label: 'Avg utilization',
+                data: hourData.data,
+                backgroundColor: 'rgba(0, 255, 65, 0.5)',
+                hoverBackgroundColor: 'rgba(0, 255, 65, 0.8)'
+              }]
             },
-            options: chartOptions
+            options: {
+              ...chartOptions,
+              scales: {
+                ...chartOptions.scales,
+                y: { ...chartOptions.scales.y, min: 0, max: 100, ticks: { ...chartOptions.scales.y.ticks, callback: function(v) { return v + '%'; } } }
+              },
+              plugins: {
+                ...chartOptions.plugins,
+                tooltip: {
+                  callbacks: {
+                    title: function(items) { return 'Hour: ' + (items[0] && items[0].label) + ''; },
+                    label: function(ctx) {
+                      var i = ctx.dataIndex;
+                      return ['Avg utilization: ' + hourData.data[i] + '%', 'Based on ' + hourData.samples[i] + ' samples'];
+                    }
+                  }
+                }
+              }
+            }
           });
 
           const tsLabels = history.map(function(r) { return r.timestamp; });
-          const inUseData = history.map(function(r) { return r.all_in_use; });
+          const utilData = history.map(function(r) {
+            return r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
+          });
           new Chart(document.getElementById('lineChart'), {
             type: 'line',
             data: {
               labels: tsLabels,
-              datasets: [{ label: 'In use', data: inUseData, borderColor: '#00ff41', backgroundColor: 'rgba(0, 255, 65, 0.08)', fill: true, tension: 0.2 }]
+              datasets: [{
+                label: 'Utilization',
+                data: utilData,
+                borderColor: '#00ff41',
+                backgroundColor: 'rgba(0, 255, 65, 0.15)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0
+              }]
             },
-            options: chartOptions
+            options: {
+              ...chartOptions,
+              scales: {
+                ...chartOptions.scales,
+                y: { ...chartOptions.scales.y, min: 0, max: 100, ticks: { ...chartOptions.scales.y.ticks, callback: function(v) { return v + '%'; } } }
+              },
+              plugins: {
+                ...chartOptions.plugins,
+                tooltip: {
+                  callbacks: {
+                    label: function(ctx) {
+                      var ts = tsLabels[ctx.dataIndex] || '';
+                      return ts + ': ' + utilData[ctx.dataIndex] + '% in use';
+                    }
+                  }
+                }
+              }
+            }
           });
 
           (function renderRecommender() {
@@ -268,7 +332,7 @@
             const pythonDow = (jsDow + 6) % 7;
             const currentHour = new Date().getHours();
             const hourLabels = HOURS.map(function(h) {
-              var lbl = h === 0 ? '12am' : h < 12 ? h + 'am' : h === 12 ? '12pm' : (h - 12) + 'pm';
+              var lbl = formatHour(h);
               return (h === currentHour ? lbl + ' \u25BC now' : lbl);
             });
             const calloutEl = document.getElementById('recommender-callout');
@@ -310,8 +374,10 @@
 
             var combined = {};
             var sampleCounts = {};
-            var washerAvgs = {};
-            var dryerAvgs = {};
+            var washerAvailPcts = {};
+            var dryerAvailPcts = {};
+            var washerInUseAvgs = {};
+            var dryerInUseAvgs = {};
             var hasNoData = {};
             HOURS.forEach(function(H) {
               var washerSamples = weekdayRows.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === H; });
@@ -319,14 +385,14 @@
               var nextHour = (H + 1) % 24;
               var dryerSamples = weekdayRows.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === nextHour; });
               if (useAllDayFallback) dryerSamples = weekdayRows.filter(function(r) { return r.hour_pst === nextHour; });
-              var avgW = washerSamples.length ? mean(washerSamples.map(function(r) { return r.washers_free; })) : 0;
-              var avgD = dryerSamples.length ? mean(dryerSamples.map(function(r) { return r.dryers_free; })) : 0;
-              var wScore = wt ? avgW / wt : 0;
-              var dScore = dt ? avgD / dt : 0;
-              combined[H] = (wScore + dScore) / 2;
+              var washerAvailPct = washerSamples.length > 0 ? 100 - mean(washerSamples.map(function(r) { return r.washer_utilization !== undefined ? r.washer_utilization : (r.washers_in_use / (r.washers_total || 1) * 100); })) : 50;
+              var dryerAvailPct = dryerSamples.length > 0 ? 100 - mean(dryerSamples.map(function(r) { return r.dryer_utilization !== undefined ? r.dryer_utilization : (r.dryers_in_use / (r.dryers_total || 1) * 100); })) : 50;
+              combined[H] = (washerAvailPct + dryerAvailPct) / 200;
               sampleCounts[H] = washerSamples.length;
-              washerAvgs[H] = avgW;
-              dryerAvgs[H] = avgD;
+              washerAvailPcts[H] = washerAvailPct;
+              dryerAvailPcts[H] = dryerAvailPct;
+              washerInUseAvgs[H] = washerSamples.length ? mean(washerSamples.map(function(r) { return r.washers_in_use; })) : 0;
+              dryerInUseAvgs[H] = dryerSamples.length ? mean(dryerSamples.map(function(r) { return r.dryers_in_use; })) : 0;
               hasNoData[H] = washerSamples.length === 0;
             });
 
@@ -334,17 +400,17 @@
             if (futureHours.indexOf(currentHour) === -1 && currentHour >= 5) futureHours = HOURS.slice(HOURS.indexOf(currentHour));
             var bestHour = futureHours.length ? futureHours.reduce(function(a, b) { return (combined[a] || 0) >= (combined[b] || 0) ? a : b; }) : HOURS[0];
             var bestScore = combined[bestHour] || 0;
-            var maxSamples = Math.max.apply(null, Object.values(sampleCounts));
 
+            var desc = bestScore > 0.75 ? 'Great time — machines are usually wide open' : bestScore >= 0.5 ? 'Decent time — usually a machine available' : 'Busy period — expect to wait';
             calloutEl.innerHTML = '<div class="time">' + (bestHour === 0 ? '12:00 AM' : bestHour < 12 ? bestHour + ':00 AM' : bestHour === 12 ? '12:00 PM' : (bestHour - 12) + ':00 PM') + '</div>' +
-              '<div class="subtitle">' + (bestScore > 0.6 ? 'Washers and dryers both tend to be free' : maxSamples < 3 ? 'Based on limited data so far' : 'Moderate availability expected') + '</div>';
+              '<div class="subtitle">' + desc + '</div>';
             if (useAllDayFallback) calloutEl.innerHTML += '<div class="subtitle" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
             fallbackEl.style.display = 'none';
             chartContainer.style.display = 'block';
 
             var weeks = Math.round(history.length / (20 * 7));
             var dataNote = history.length < 20 ? '1 day' : (weeks < 1 ? '1 week' : weeks + ' week' + (weeks > 1 ? 's' : ''));
-            confidenceEl.textContent = 'CONFIDENCE: ' + dataNote + ' of samples. Accuracy improves with more data.';
+            confidenceEl.textContent = 'Scores based on ' + dataNote + ' of data. More accurate over time.';
 
             var chartData = HOURS.map(function(h) {
               return hasNoData[h] ? 0.5 : (combined[h] || 0);
@@ -390,8 +456,8 @@
                         var h = HOURS[ctx.dataIndex];
                         var lines = [
                           'Score: ' + Math.round((chartData[ctx.dataIndex] || 0) * 100) + '%',
-                          'Washers avg free: ' + (washerAvgs[h] !== undefined ? washerAvgs[h].toFixed(1) : '?') + ' / ' + wt,
-                          'Dryers avg free (1hr later): ' + (dryerAvgs[h] !== undefined ? dryerAvgs[h].toFixed(1) : '?') + ' / ' + dt,
+                          'Washer availability: ' + Math.round(washerAvailPcts[h] || 0) + '% (avg ' + (washerInUseAvgs[h] !== undefined ? washerInUseAvgs[h].toFixed(1) : '?') + ' in use)',
+                          'Dryer availability 1hr later: ' + Math.round(dryerAvailPcts[h] || 0) + '% (avg ' + (dryerInUseAvgs[h] !== undefined ? dryerInUseAvgs[h].toFixed(1) : '?') + ' in use)',
                           'Based on ' + (sampleCounts[h] || 0) + ' observations'
                         ];
                         if (hasNoData[h]) lines.push('No data yet for this time slot');
