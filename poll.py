@@ -25,6 +25,7 @@ def main():
     row = {
         "timestamp":      timestamp,
         "hour_pst":       hour_pst,
+        "day_of_week":    now.weekday(),  # 0=Mon, 6=Sun
         "washers_free":   sum(1 for m in washers if m["available"]),
         "washers_in_use": sum(1 for m in washers if not m["available"]),
         "washers_total":  len(washers),
@@ -36,9 +37,27 @@ def main():
         "all_total":      len(machines),
     }
 
-    # Append to private CSV log
+    # Append to private CSV log (migrate to add day_of_week if needed)
     os.makedirs("data", exist_ok=True)
     file_exists = os.path.isfile(DATA_FILE)
+    if file_exists:
+        with open(DATA_FILE, "r") as f:
+            first_line = f.readline()
+        if "day_of_week" not in first_line:
+            with open(DATA_FILE, "r") as f:
+                all_rows = list(csv.DictReader(f))
+            for r in all_rows:
+                if "day_of_week" not in r:
+                    try:
+                        dt = datetime.strptime(r["timestamp"], "%Y-%m-%d %H:%M:%S")
+                        r["day_of_week"] = dt.weekday()
+                    except (ValueError, KeyError):
+                        r["day_of_week"] = 0
+            with open(DATA_FILE, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=row.keys(), extrasaction="ignore")
+                writer.writeheader()
+                for r in all_rows:
+                    writer.writerow(r)
     with open(DATA_FILE, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=row.keys())
         if not file_exists:
@@ -54,6 +73,7 @@ def main():
                 history.append({
                     "timestamp":      r["timestamp"],
                     "hour_pst":       int(r["hour_pst"]),
+                    "day_of_week":    int(r.get("day_of_week", 0)),
                     "washers_free":   int(r["washers_free"]),
                     "washers_in_use": int(r["washers_in_use"]),
                     "dryers_free":    int(r["dryers_free"]),

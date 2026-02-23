@@ -84,6 +84,15 @@
       color: var(--text-muted);
     }
     .error { color: var(--red); }
+    .recommender-callout {
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .recommender-callout .time { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .recommender-callout .subtitle { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
+    .recommender-confidence { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; }
   </style>
 </head>
 <body>
@@ -112,6 +121,16 @@
       <div class="card chart-card">
         <h3>Machines in use over last 7 days</h3>
         <div class="chart-container"><canvas id="lineChart"></canvas></div>
+      </div>
+
+      <div class="card" id="recommender-section">
+        <h3 style="margin:0 0 1rem 0; color:var(--text-muted); font-size:0.9rem;">Best Time to Do Laundry Today</h3>
+        <div id="recommender-callout" class="recommender-callout"></div>
+        <div id="recommender-chart-container" class="chart-container" style="display:none;">
+          <canvas id="recommenderChart"></canvas>
+        </div>
+        <div id="recommender-fallback" style="display:none;"></div>
+        <div id="recommender-confidence" class="recommender-confidence"></div>
       </div>
 
       <div class="last-updated" id="last-updated"></div>
@@ -199,6 +218,162 @@
             },
             options: chartOptions
           });
+
+          (function renderRecommender() {
+            const HOURS = [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0];
+            const jsDow = new Date().getDay();
+            const pythonDow = (jsDow + 6) % 7;
+            const currentHour = new Date().getHours();
+            const hourLabels = HOURS.map(function(h) {
+              var lbl = h === 0 ? '12am' : h < 12 ? h + 'am' : h === 12 ? '12pm' : (h - 12) + 'pm';
+              return (h === currentHour ? lbl + ' \u25BC now' : lbl);
+            });
+            const calloutEl = document.getElementById('recommender-callout');
+            const chartContainer = document.getElementById('recommender-chart-container');
+            const fallbackEl = document.getElementById('recommender-fallback');
+            const confidenceEl = document.getElementById('recommender-confidence');
+            const wt = cur.washers_total || 5;
+            const dt = cur.dryers_total || 10;
+
+            function scoreToColor(score) {
+              if (score < 0.5) {
+                const r = 220;
+                const g = Math.round(score * 2 * 180);
+                return 'rgb(' + r + ', ' + g + ', 40)';
+              } else {
+                const r = Math.round((1 - score) * 2 * 220);
+                const g = 180;
+                return 'rgb(' + r + ', ' + g + ', 40)';
+              }
+            }
+
+            function mean(arr) {
+              if (!arr.length) return 0;
+              return arr.reduce(function(a,b) { return a + b; }, 0) / arr.length;
+            }
+
+            if (!history.length || history.length < 3) {
+              calloutEl.innerHTML = '<div class="subtitle">Check back after a few days of data collection</div>';
+              fallbackEl.style.display = 'none';
+              chartContainer.style.display = 'none';
+              confidenceEl.textContent = '';
+              return;
+            }
+
+            var useAllDayFallback = false;
+            var weekdayRows = history.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow; });
+            if (weekdayRows.length < 3) {
+              useAllDayFallback = true;
+              weekdayRows = history;
+            }
+
+            var combined = {};
+            var sampleCounts = {};
+            var washerAvgs = {};
+            var dryerAvgs = {};
+            var hasNoData = {};
+            HOURS.forEach(function(H) {
+              var washerSamples = weekdayRows.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === H; });
+              if (useAllDayFallback) washerSamples = weekdayRows.filter(function(r) { return r.hour_pst === H; });
+              var nextHour = (H + 1) % 24;
+              var dryerSamples = weekdayRows.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === nextHour; });
+              if (useAllDayFallback) dryerSamples = weekdayRows.filter(function(r) { return r.hour_pst === nextHour; });
+              var avgW = washerSamples.length ? mean(washerSamples.map(function(r) { return r.washers_free; })) : 0;
+              var avgD = dryerSamples.length ? mean(dryerSamples.map(function(r) { return r.dryers_free; })) : 0;
+              var wScore = wt ? avgW / wt : 0;
+              var dScore = dt ? avgD / dt : 0;
+              combined[H] = (wScore + dScore) / 2;
+              sampleCounts[H] = washerSamples.length;
+              washerAvgs[H] = avgW;
+              dryerAvgs[H] = avgD;
+              hasNoData[H] = washerSamples.length === 0;
+            });
+
+            var futureHours = currentHour < 5 ? HOURS.slice() : HOURS.slice(HOURS.indexOf(currentHour));
+            if (futureHours.indexOf(currentHour) === -1 && currentHour >= 5) futureHours = HOURS.slice(HOURS.indexOf(currentHour));
+            var bestHour = futureHours.length ? futureHours.reduce(function(a, b) { return (combined[a] || 0) >= (combined[b] || 0) ? a : b; }) : HOURS[0];
+            var bestScore = combined[bestHour] || 0;
+            var maxSamples = Math.max.apply(null, Object.values(sampleCounts));
+
+            calloutEl.innerHTML = '<div class="time">' + (bestHour === 0 ? '12:00 AM' : bestHour < 12 ? bestHour + ':00 AM' : bestHour === 12 ? '12:00 PM' : (bestHour - 12) + ':00 PM') + '</div>' +
+              '<div class="subtitle">' + (bestScore > 0.6 ? 'Washers and dryers both tend to be free' : maxSamples < 3 ? 'Based on limited data so far' : 'Moderate availability expected') + '</div>';
+            if (useAllDayFallback) calloutEl.innerHTML += '<div class="subtitle" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
+            fallbackEl.style.display = 'none';
+            chartContainer.style.display = 'block';
+
+            var weeks = Math.round(history.length / (20 * 7));
+            var dataNote = history.length < 20 ? '1 day' : (weeks < 1 ? '1 week' : weeks + ' week' + (weeks > 1 ? 's' : ''));
+            confidenceEl.textContent = 'Scores based on ' + dataNote + ' of data. More accurate over time.';
+
+            var chartData = HOURS.map(function(h) {
+              return hasNoData[h] ? 0.5 : (combined[h] || 0);
+            });
+            var barColors = chartData.map(function(s, i) {
+              return scoreToColor(s);
+            });
+            var barOpacity = HOURS.map(function(h) {
+              if (currentHour < 5) return 1;
+              if (h < currentHour && h !== 0) return 0.4;
+              return 1;
+            });
+            var bgColors = barColors.map(function(c, i) {
+              return c.replace(/\)$/, ', ' + barOpacity[i] + ')').replace(/^rgb/, 'rgba');
+            });
+            var borderColors = HOURS.map(function(h) {
+              return h === bestHour ? 'rgba(122, 162, 247, 0.9)' : 'transparent';
+            });
+            var borderWidths = HOURS.map(function(h) {
+              return h === bestHour ? 2 : 0;
+            });
+
+            new Chart(document.getElementById('recommenderChart'), {
+              type: 'bar',
+              data: {
+                labels: hourLabels,
+                datasets: [{
+                  label: 'Score',
+                  data: chartData,
+                  backgroundColor: bgColors,
+                  borderColor: borderColors,
+                  borderWidth: borderWidths
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: function(ctx) {
+                        var h = HOURS[ctx.dataIndex];
+                        var lines = [
+                          'Score: ' + Math.round((chartData[ctx.dataIndex] || 0) * 100) + '%',
+                          'Washers avg free: ' + (washerAvgs[h] !== undefined ? washerAvgs[h].toFixed(1) : '?') + ' / ' + wt,
+                          'Dryers avg free (1hr later): ' + (dryerAvgs[h] !== undefined ? dryerAvgs[h].toFixed(1) : '?') + ' / ' + dt,
+                          'Based on ' + (sampleCounts[h] || 0) + ' observations'
+                        ];
+                        if (hasNoData[h]) lines.push('No data yet for this time slot');
+                        return lines;
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  x: {
+                    grid: { color: 'rgba(192, 202, 245, 0.1)' },
+                    ticks: { color: '#565f89', maxTicksLimit: 20 }
+                  },
+                  y: {
+                    min: 0,
+                    max: 1,
+                    grid: { color: 'rgba(192, 202, 245, 0.1)' },
+                    ticks: { color: '#565f89', callback: function(v) { return (v * 100) + '%'; } }
+                  }
+                }
+              }
+            });
+          })();
         })
         .catch(function(err) {
           console.error('Failed to load summary.json:', err);
