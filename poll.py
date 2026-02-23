@@ -6,8 +6,53 @@ from datetime import datetime, timezone
 
 LOCATION_ID = os.environ["LOCATION_ID"]
 ROOM_ID     = os.environ["ROOM_ID"]
-DATA_FILE   = "data/laundry_log.csv"
-SUMMARY_FILE = "docs/summary.json"
+DATA_FILE     = "data/laundry_log.csv"
+SUMMARY_FILE  = "docs/summary.json"
+MACHINES_FILE = "data/machines_log.csv"
+
+def log_machines(machines, timestamp, hour_pst, minute, day_of_week):
+    """Log every API field per machine for ML training. opaqueId stays private in CSV."""
+    if not machines:
+        return
+    rows = []
+    for m in machines:
+        s = m.get("settings") or {}
+        c = m.get("capability") or {}
+        rows.append({
+            "timestamp":             timestamp,
+            "hour_pst":              hour_pst,
+            "minute":                minute,
+            "day_of_week":           day_of_week,
+            "opaque_id":             m.get("opaqueId", ""),
+            "sticker":               m.get("stickerNumber", ""),
+            "license_plate":         m.get("licensePlate", ""),
+            "nfc_id":                m.get("nfcId", ""),
+            "qr_code_id":            m.get("qrCodeId", ""),
+            "machine_type":          m.get("type", ""),
+            "controller_type":       m.get("controllerType", ""),
+            "available":             int(bool(m.get("available", True))),
+            "mode":                  m.get("mode", ""),
+            "time_remaining":        m.get("timeRemaining", 0),
+            "door_closed":           int(bool(m.get("doorClosed", True))),
+            "in_service":            int(m.get("inService") is not None),
+            "not_available_reason":  m.get("notAvailableReason") or "",
+            "free_play":             int(bool(m.get("freePlay", False))),
+            "display":               m.get("display") or "",
+            "group_id":              m.get("groupId") or "",
+            "soil":                  s.get("soil") or "",
+            "cycle":                 s.get("cycle") or "",
+            "washer_temp":           s.get("washerTemp") or "",
+            "dryer_temp":            s.get("dryerTemp") or "",
+            "can_add_time":          int(bool(c.get("addTime", False))),
+            "show_settings":         int(bool(c.get("showSettings", False))),
+        })
+    os.makedirs("data", exist_ok=True)
+    file_exists = os.path.isfile(MACHINES_FILE)
+    with open(MACHINES_FILE, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerows(rows)
 
 def get_machines():
     url = f"https://mycscgo.com/api/v3/location/{LOCATION_ID}/room/{ROOM_ID}/machines"
@@ -20,6 +65,7 @@ def main():
     minute    = now.minute  # will be 0 or 30
 
     machines = get_machines()
+    log_machines(machines, timestamp, hour_pst, minute, now.weekday())
     washers  = [m for m in machines if m["type"] == "washer"]
     dryers   = [m for m in machines if m["type"] == "dryer"]
 

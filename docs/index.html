@@ -137,6 +137,23 @@
     }
     .recommender-callout .subtitle { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
     .recommender-confidence { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.5rem; letter-spacing: 0.05em; }
+    .machine-health-subtitle { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1rem; }
+    .machine-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+    .machine-card {
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.8rem;
+      border: 1px solid;
+    }
+    .machine-card .machine-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .machine-card .machine-card-title { font-weight: 600; }
+    .machine-card .machine-card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .machine-card .machine-card-row { color: var(--text-dim); margin-top: 0.25rem; }
+    .machine-card .machine-card-bar-wrap { margin-top: 0.5rem; }
+    .machine-card .machine-card-bar { height: 6px; border-radius: 3px; background: rgba(0,0,0,0.3); overflow: hidden; }
+    .machine-card .machine-card-bar-fill { height: 100%; border-radius: 3px; }
+    .machine-card .machine-card-reason { font-size: 0.7rem; color: var(--text-muted); font-style: italic; margin-top: 0.5rem; }
+    .machine-card-accumulating { background: var(--surface); border-color: var(--border); padding: 1rem; color: var(--text-dim); }
   </style>
 </head>
 <body>
@@ -174,6 +191,12 @@
       <div class="card chart-card">
         <h3>Utilization — Last 7 Days</h3>
         <div class="chart-container"><canvas id="lineChart"></canvas></div>
+      </div>
+
+      <div class="card" id="machine-health-section">
+        <h3 style="margin:0 0 0.5rem 0;">Machine Health</h3>
+        <div id="machine-health-subtitle" class="machine-health-subtitle"></div>
+        <div id="machine-panel" class="machine-panel"></div>
       </div>
 
       <div class="card" id="recommender-section">
@@ -270,11 +293,59 @@
         }
       };
 
-      fetch('https://zhanming-wang.github.io/community-laundry-analysis/summary.json')
-        .then(function(res) { return res.ok ? res.json() : Promise.reject(new Error('Failed to load data')); })
-        .then(function(summary) {
-          loading.style.display = 'none';
-          content.style.display = 'block';
+      var base = 'https://zhanming-wang.github.io/community-laundry-analysis';
+      Promise.all([
+        fetch(base + '/summary.json').then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('Failed to load summary')); }),
+        fetch(base + '/alerts.json').then(function(r) { return r.ok ? r.json() : { model_status: 'accumulating', message: 'Building anomaly model...', machines: [] }; }).catch(function() { return { model_status: 'accumulating', message: 'Loading...', machines: [] }; })
+      ]).then(function(arr) {
+        var summary = arr[0];
+        var alerts = arr[1];
+        loading.style.display = 'none';
+        content.style.display = 'block';
+
+        function renderMachinePanel(alerts) {
+          var container = document.getElementById('machine-panel');
+          var subtitle = document.getElementById('machine-health-subtitle');
+          var STATUS_COLORS = {
+            normal:   { dot: '#22c55e', border: '#166534', bg: '#0f172a' },
+            watch:    { dot: '#eab308', border: '#854d0e', bg: '#0f172a' },
+            warning:  { dot: '#f97316', border: '#9a3412', bg: '#1a0f0a' },
+            critical: { dot: '#ef4444', border: '#991b1b', bg: '#1a0808' }
+          };
+          if (alerts.model_status === 'accumulating') {
+            subtitle.textContent = '';
+            container.innerHTML = '<div class="machine-card machine-card-accumulating">\u21BB ' + (alerts.message || 'Building anomaly model...') + '</div>';
+            return;
+          }
+          var machines = alerts.machines || [];
+          var flagged = machines.filter(function(m) { return m.status === 'critical' || m.status === 'warning'; });
+          subtitle.textContent = flagged.length === 0 ? 'All ' + machines.length + ' machines operating normally' : '\u26A0\uFE0F ' + flagged.length + ' machine(s) need attention';
+          container.innerHTML = '';
+          machines.forEach(function(m) {
+            var c = STATUS_COLORS[m.status] || STATUS_COLORS.normal;
+            var typeLabel = (m.machine_type || '').toUpperCase();
+            var card = document.createElement('div');
+            card.className = 'machine-card';
+            card.style.borderColor = c.border;
+            card.style.background = c.bg;
+            var pct = Math.round((m.anomaly_score || 0) * 100);
+            card.innerHTML =
+              '<div class="machine-card-header">' +
+                '<span class="machine-card-title">' + typeLabel + ' #' + m.sticker + '</span>' +
+                '<span style="display:flex;align-items:center;gap:0.35rem;"><span class="machine-card-dot" style="background:' + c.dot + '"></span> ' + (m.status || 'normal').toUpperCase() + '</span>' +
+              '</div>' +
+              '<div class="machine-card-row">Controller: ' + (m.controller_type || '') + '</div>' +
+              '<div class="machine-card-row">Mode: ' + (m.current_mode || '') + '</div>' +
+              '<div class="machine-card-row">Available: ' + (m.available ? 'Yes' : 'No') + '</div>' +
+              '<div class="machine-card-row">Time remaining: ' + (m.time_remaining || 0) + ' min</div>' +
+              '<div class="machine-card-row">In current mode: ' + (m.hours_in_current_mode || 0) + 'h</div>' +
+              '<div class="machine-card-bar-wrap">Anomaly score: <span>' + pct + '%</span></div>' +
+              '<div class="machine-card-bar"><div class="machine-card-bar-fill" style="width:' + pct + '%;background:' + c.dot + '"></div></div>' +
+              '<div class="machine-card-reason">' + (m.reason || '') + '</div>';
+            container.appendChild(card);
+          });
+        }
+        renderMachinePanel(alerts);
 
           const cur = summary.current || {};
           document.getElementById('washers-free').textContent = cur.washers_free;

@@ -1,0 +1,6 @@
+{
+  "trained_at": "",
+  "model_status": "accumulating",
+  "message": "No machine data collected yet. Run the poll workflow to start logging.",
+  "machines": []
+}
