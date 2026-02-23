@@ -167,6 +167,11 @@
       </div>
 
       <div class="card chart-card">
+        <h3>Average Utilization by Weekday</h3>
+        <div class="chart-container"><canvas id="weekdayChart"></canvas></div>
+      </div>
+
+      <div class="card chart-card">
         <h3>Utilization — Last 7 Days</h3>
         <div class="chart-container"><canvas id="lineChart"></canvas></div>
       </div>
@@ -195,6 +200,13 @@
         loading.outerHTML = '<div class="error" id="loading">' + msg + '</div>';
       }
 
+      function formatTimestampShort(ts) {
+        if (!ts || ts.length < 10) return ts;
+        var d = ts.split(' ')[0];
+        if (!d) return ts;
+        var p = d.split('-');
+        return (p[1] || '') + '-' + (p[2] || '');
+      }
       function formatHour(h) {
         if (h === 0) return '12am';
         if (h < 12) return h + 'am';
@@ -219,6 +231,23 @@
           labels.push(formatHour(h));
           data.push(byHour[h].n > 0 ? Math.round(byHour[h].sum / byHour[h].n * 10) / 10 : 0);
           samples.push(byHour[h].n);
+        }
+        return { labels, data, samples };
+      }
+      function avgUtilByWeekday(history) {
+        var dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        var byDay = {};
+        for (var d = 0; d < 7; d++) byDay[d] = { sum: 0, n: 0 };
+        history.forEach(function(r) {
+          var d = r.day_of_week !== undefined ? r.day_of_week : 0;
+          var util = r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
+          if (byDay[d] !== undefined) { byDay[d].sum += util; byDay[d].n += 1; }
+        });
+        var labels = [], data = [], samples = [];
+        for (var d = 0; d < 7; d++) {
+          labels.push(dayNames[d]);
+          data.push(byDay[d].n > 0 ? Math.round(byDay[d].sum / byDay[d].n * 10) / 10 : 0);
+          samples.push(byDay[d].n);
         }
         return { labels, data, samples };
       }
@@ -293,7 +322,42 @@
             }
           });
 
-          const tsLabels = history.map(function(r) { return r.timestamp; });
+          const weekdayData = avgUtilByWeekday(history);
+          new Chart(document.getElementById('weekdayChart'), {
+            type: 'bar',
+            data: {
+              labels: weekdayData.labels,
+              datasets: [{
+                label: 'Avg utilization',
+                data: weekdayData.data,
+                backgroundColor: 'rgba(0, 255, 65, 0.5)',
+                hoverBackgroundColor: 'rgba(0, 255, 65, 0.8)'
+              }]
+            },
+            options: {
+              ...chartOptions,
+              layout: { padding: 0 },
+              scales: {
+                ...chartOptions.scales,
+                y: { ...chartOptions.scales.y, min: 0, max: 100, ticks: { ...chartOptions.scales.y.ticks, callback: function(v) { return v + '%'; } } }
+              },
+              plugins: {
+                ...chartOptions.plugins,
+                tooltip: {
+                  callbacks: {
+                    title: function(items) { return (items[0] && items[0].label) || ''; },
+                    label: function(ctx) {
+                      var i = ctx.dataIndex;
+                      return ['Avg utilization: ' + weekdayData.data[i] + '%', 'Based on ' + weekdayData.samples[i] + ' samples'];
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          const tsLabels = history.map(function(r) { return formatTimestampShort(r.timestamp); });
+          const tsFull = history.map(function(r) { return r.timestamp; });
           const utilData = history.map(function(r) {
             return r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
           });
@@ -316,7 +380,7 @@
               layout: { padding: 0 },
               scales: {
                 ...chartOptions.scales,
-                x: { ...chartOptions.scales.x, offset: false },
+                x: { ...chartOptions.scales.x, offset: false, maxTicksLimit: 14, ticks: { ...chartOptions.scales.x.ticks, maxRotation: 0, minRotation: 0 } },
                 y: { ...chartOptions.scales.y, min: 0, max: 100, ticks: { ...chartOptions.scales.y.ticks, callback: function(v) { return v + '%'; } } }
               },
               plugins: {
@@ -324,7 +388,7 @@
                 tooltip: {
                   callbacks: {
                     label: function(ctx) {
-                      var ts = tsLabels[ctx.dataIndex] || '';
+                      var ts = tsFull[ctx.dataIndex] || '';
                       return ts + ': ' + utilData[ctx.dataIndex] + '% in use';
                     }
                   }
