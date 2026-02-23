@@ -3,38 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Laundry Room Availability</title>
+  <title>[CLASSIFIED] Asset Status</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
-      --bg: #1a1b26;
-      --surface: #24283b;
-      --text: #c0caf5;
-      --text-muted: #565f89;
-      --green: #9ece6a;
-      --red: #f7768e;
-      --accent: #7aa2f7;
+      --bg: #0a0a0a;
+      --surface: #0d0d0d;
+      --border: #1a2e1a;
+      --text: #00ff41;
+      --text-dim: #006622;
+      --text-muted: #004d1a;
+      --green: #00ff41;
+      --red: #ff3333;
+      --amber: #ffb000;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
       background: var(--bg);
       color: var(--text);
       padding: 1rem;
+      font-size: 14px;
     }
-    h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin: 0 0 1.5rem 0;
-      color: var(--text);
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 255, 65, 0.02) 2px,
+        rgba(0, 255, 65, 0.02) 4px
+      );
+      z-index: 9999;
     }
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .header .tag { color: var(--text-dim); font-size: 0.7rem; letter-spacing: 0.15em; }
+    .header h1 { font-size: 1rem; font-weight: 500; margin: 0.25rem 0 0 0; }
     .card {
       background: var(--surface);
-      border-radius: 12px;
-      padding: 1.25rem 1.5rem;
-      margin-bottom: 1.5rem;
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
     }
     .status-card {
       display: grid;
@@ -46,85 +70,104 @@
       .status-card { grid-template-columns: 1fr; }
     }
     .status-card h2 {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.2em;
       color: var(--text-muted);
       margin: 0 0 0.5rem 0;
       grid-column: 1 / -1;
     }
     .machine-block {
       padding: 0.75rem 1rem;
-      border-radius: 8px;
-      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      background: rgba(0, 30, 0, 0.2);
     }
-    .machine-block .label { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.25rem; }
-    .machine-block .counts { font-size: 1.25rem; font-weight: 600; }
-    .machine-block .free { color: var(--green); }
+    .machine-block .label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+    .machine-block .counts { font-size: 1.1rem; font-weight: 500; }
+    .machine-block .free { color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 65, 0.5); }
     .machine-block .in-use { color: var(--red); }
     .chart-container {
       position: relative;
       height: 220px;
       margin-top: 0.5rem;
     }
-    .chart-card h3 {
-      font-size: 0.9rem;
+    .chart-card h3, .card h3 {
+      font-size: 0.7rem;
       color: var(--text-muted);
       margin: 0 0 0.5rem 0;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
     }
     .last-updated {
-      font-size: 0.8rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
-      margin-top: 2rem;
+      margin-top: 1.5rem;
       text-align: center;
+      letter-spacing: 0.05em;
     }
     .loading, .error {
-      text-align: center;
-      padding: 2rem;
-      color: var(--text-muted);
+      text-align: left;
+      padding: 1.5rem;
+      color: var(--text-dim);
+      font-family: inherit;
+    }
+    .loading::after {
+      content: '_';
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      50% { opacity: 0; }
     }
     .error { color: var(--red); }
     .recommender-callout {
-      background: rgba(0,0,0,0.2);
-      border-radius: 8px;
+      border: 1px solid var(--border);
       padding: 1rem 1.25rem;
       margin-bottom: 1rem;
+      background: rgba(0, 40, 0, 0.2);
     }
-    .recommender-callout .time { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
-    .recommender-callout .subtitle { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
-    .recommender-confidence { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .recommender-callout .time {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--amber);
+      text-shadow: 0 0 12px rgba(255, 176, 0, 0.6);
+    }
+    .recommender-callout .subtitle { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+    .recommender-confidence { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.5rem; letter-spacing: 0.05em; }
   </style>
 </head>
 <body>
-  <h1>Laundry Room Availability</h1>
+  <div class="header">
+    <div class="tag">[ RESTRICTED ]</div>
+    <h1>LAUNDRY ROOM ASSET STATUS</h1>
+  </div>
 
   <div id="app">
-    <div class="loading" id="loading">Loading…</div>
+    <div class="loading" id="loading">CONNECTING...</div>
     <div id="content" style="display: none;">
       <div class="card status-card">
-        <h2>Right now</h2>
+        <h2>LIVE_STATUS</h2>
         <div class="machine-block" id="washers-block">
-          <div class="label">Washers</div>
+          <div class="label">WASHERS</div>
           <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
         </div>
         <div class="machine-block" id="dryers-block">
-          <div class="label">Dryers</div>
+          <div class="label">DRYERS</div>
           <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
         </div>
       </div>
 
       <div class="card chart-card">
-        <h3>Average machines in use by hour (0–23)</h3>
+        <h3>AVG_UTILIZATION_BY_HOUR</h3>
         <div class="chart-container"><canvas id="barChart"></canvas></div>
       </div>
 
       <div class="card chart-card">
-        <h3>Machines in use over last 7 days</h3>
+        <h3>UTILIZATION_7D_LOG</h3>
         <div class="chart-container"><canvas id="lineChart"></canvas></div>
       </div>
 
       <div class="card" id="recommender-section">
-        <h3 style="margin:0 0 1rem 0; color:var(--text-muted); font-size:0.9rem;">Best Time to Do Laundry Today</h3>
+        <h3 style="margin:0 0 1rem 0;">OPTIMAL_WINDOW_TODAY</h3>
         <div id="recommender-callout" class="recommender-callout"></div>
         <div id="recommender-chart-container" class="chart-container" style="display:none;">
           <canvas id="recommenderChart"></canvas>
@@ -174,12 +217,12 @@
         },
         scales: {
           x: {
-            grid: { color: 'rgba(192, 202, 245, 0.1)' },
-            ticks: { color: '#565f89', maxTicksLimit: 12 }
+            grid: { color: 'rgba(0, 255, 65, 0.1)' },
+            ticks: { color: '#006622', maxTicksLimit: 12, font: { family: "'JetBrains Mono', monospace" } }
           },
           y: {
-            grid: { color: 'rgba(192, 202, 245, 0.1)' },
-            ticks: { color: '#565f89' }
+            grid: { color: 'rgba(0, 255, 65, 0.1)' },
+            ticks: { color: '#006622', font: { family: "'JetBrains Mono', monospace" } }
           }
         }
       };
@@ -195,7 +238,7 @@
           document.getElementById('washers-in-use').textContent = cur.washers_in_use;
           document.getElementById('dryers-free').textContent = cur.dryers_free;
           document.getElementById('dryers-in-use').textContent = cur.dryers_in_use;
-          document.getElementById('last-updated').textContent = 'Last updated: ' + summary.last_updated;
+          document.getElementById('last-updated').textContent = 'LAST_POLL: ' + summary.last_updated;
 
           const history = summary.history || [];
           const hourData = avgByHour(history);
@@ -203,7 +246,7 @@
             type: 'bar',
             data: {
               labels: hourData.labels,
-              datasets: [{ label: 'Avg in use', data: hourData.data, backgroundColor: 'rgba(122, 162, 247, 0.6)' }]
+              datasets: [{ label: 'Avg in use', data: hourData.data, backgroundColor: 'rgba(0, 255, 65, 0.4)' }]
             },
             options: chartOptions
           });
@@ -214,7 +257,7 @@
             type: 'line',
             data: {
               labels: tsLabels,
-              datasets: [{ label: 'In use', data: inUseData, borderColor: '#7aa2f7', backgroundColor: 'rgba(122, 162, 247, 0.1)', fill: true, tension: 0.2 }]
+              datasets: [{ label: 'In use', data: inUseData, borderColor: '#00ff41', backgroundColor: 'rgba(0, 255, 65, 0.08)', fill: true, tension: 0.2 }]
             },
             options: chartOptions
           });
@@ -237,13 +280,11 @@
 
             function scoreToColor(score) {
               if (score < 0.5) {
-                const r = 220;
-                const g = Math.round(score * 2 * 180);
-                return 'rgb(' + r + ', ' + g + ', 40)';
+                const g = Math.round(score * 2 * 255);
+                return 'rgb(255, ' + g + ', 0)';
               } else {
-                const r = Math.round((1 - score) * 2 * 220);
-                const g = 180;
-                return 'rgb(' + r + ', ' + g + ', 40)';
+                const r = Math.round((1 - score) * 2 * 255);
+                return 'rgb(' + r + ', 255, 0)';
               }
             }
 
@@ -303,7 +344,7 @@
 
             var weeks = Math.round(history.length / (20 * 7));
             var dataNote = history.length < 20 ? '1 day' : (weeks < 1 ? '1 week' : weeks + ' week' + (weeks > 1 ? 's' : ''));
-            confidenceEl.textContent = 'Scores based on ' + dataNote + ' of data. More accurate over time.';
+            confidenceEl.textContent = 'CONFIDENCE: ' + dataNote + ' of samples. Accuracy improves with more data.';
 
             var chartData = HOURS.map(function(h) {
               return hasNoData[h] ? 0.5 : (combined[h] || 0);
@@ -320,7 +361,7 @@
               return c.replace(/\)$/, ', ' + barOpacity[i] + ')').replace(/^rgb/, 'rgba');
             });
             var borderColors = HOURS.map(function(h) {
-              return h === bestHour ? 'rgba(122, 162, 247, 0.9)' : 'transparent';
+              return h === bestHour ? 'rgba(255, 176, 0, 0.9)' : 'transparent';
             });
             var borderWidths = HOURS.map(function(h) {
               return h === bestHour ? 2 : 0;
@@ -361,14 +402,14 @@
                 },
                 scales: {
                   x: {
-                    grid: { color: 'rgba(192, 202, 245, 0.1)' },
-                    ticks: { color: '#565f89', maxTicksLimit: 20 }
+                    grid: { color: 'rgba(0, 255, 65, 0.1)' },
+                    ticks: { color: '#006622', maxTicksLimit: 20, font: { family: "'JetBrains Mono', monospace" } }
                   },
                   y: {
                     min: 0,
                     max: 1,
-                    grid: { color: 'rgba(192, 202, 245, 0.1)' },
-                    ticks: { color: '#565f89', callback: function(v) { return (v * 100) + '%'; } }
+                    grid: { color: 'rgba(0, 255, 65, 0.1)' },
+                    ticks: { color: '#006622', callback: function(v) { return (v * 100) + '%'; } }
                   }
                 }
               }
