@@ -1,6 +1,6 @@
 {
-  "trained_at": "",
+  "trained_at": "2026-02-23 19:32:23",
   "model_status": "accumulating",
-  "message": "No machine data collected yet. Run the poll workflow to start logging.",
+  "message": "Collecting data \u2014 19/500 rows. Check back in ~10 more day(s).",
   "machines": []
 }
