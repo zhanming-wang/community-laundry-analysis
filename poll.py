@@ -17,6 +17,7 @@ def main():
     now       = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
     hour_pst  = (now.hour - 8) % 24
+    minute    = now.minute  # will be 0 or 30
 
     machines = get_machines()
     washers  = [m for m in machines if m["type"] == "washer"]
@@ -32,6 +33,7 @@ def main():
     row = {
         "timestamp":           timestamp,
         "hour_pst":            hour_pst,
+        "minute":              minute,
         "day_of_week":         now.weekday(),  # 0=Mon, 6=Sun
         "washers_free":        sum(1 for m in washers if m["available"]),
         "washers_in_use":      washers_in_use,
@@ -53,7 +55,7 @@ def main():
     if file_exists:
         with open(DATA_FILE, "r") as f:
             first_line = f.readline()
-        needs_migrate = "day_of_week" not in first_line or "washer_utilization" not in first_line
+        needs_migrate = "day_of_week" not in first_line or "washer_utilization" not in first_line or "minute" not in first_line
         if needs_migrate:
             with open(DATA_FILE, "r") as f:
                 all_rows = list(csv.DictReader(f))
@@ -64,6 +66,12 @@ def main():
                         r["day_of_week"] = dt.weekday()
                     except (ValueError, KeyError):
                         r["day_of_week"] = 0
+                if "minute" not in r or r.get("minute") == "":
+                    try:
+                        dt = datetime.strptime(r["timestamp"], "%Y-%m-%d %H:%M:%S")
+                        r["minute"] = dt.minute
+                    except (ValueError, KeyError):
+                        r["minute"] = 0
                 if "washer_utilization" not in r or r.get("washer_utilization") == "":
                     wtot = int(r.get("washers_total", 0))
                     wuse = int(r.get("washers_in_use", 0))
@@ -87,12 +95,12 @@ def main():
             writer.writeheader()
         writer.writerow(row)
 
-    # Read last 168 rows (7 days) for history — NO location IDs written here
+    # Read last 336 rows (7 days × 48 polls/day) for history — NO location IDs written here
     history = []
     if os.path.isfile(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             reader = list(csv.DictReader(f))
-            for r in reader[-168:]:
+            for r in reader[-336:]:
                 wt = int(r.get("washers_total", 0))
                 wuse = int(r.get("washers_in_use", 0))
                 dtot = int(r.get("dryers_total", 0))
@@ -108,6 +116,7 @@ def main():
                 history.append({
                     "timestamp":           r["timestamp"],
                     "hour_pst":            int(r["hour_pst"]),
+                    "minute":              int(r.get("minute", 0)),
                     "day_of_week":         int(r.get("day_of_week", 0)),
                     "washers_free":        int(r["washers_free"]),
                     "washers_in_use":      wuse,
@@ -129,6 +138,7 @@ def main():
         "last_updated":   timestamp,
         "current": {
             "washers_free":       row["washers_free"],
+            "minute":             row["minute"],
             "washers_in_use":     row["washers_in_use"],
             "washers_total":      row["washers_total"],
             "dryers_free":        row["dryers_free"],

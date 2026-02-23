@@ -423,11 +423,6 @@
               }
             }
 
-            function mean(arr) {
-              if (!arr.length) return 0;
-              return arr.reduce(function(a,b) { return a + b; }, 0) / arr.length;
-            }
-
             if (!history.length || history.length < 3) {
               calloutEl.innerHTML = '<div class="subtitle">Check back after a few days of data collection</div>';
               fallbackEl.style.display = 'none';
@@ -436,70 +431,57 @@
               return;
             }
 
-            var useAllDayFallback = false;
-            var weekdayRows = history.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow; });
-            if (weekdayRows.length < 3) {
-              useAllDayFallback = true;
-              weekdayRows = history;
-            }
-
-            var combined = {};
-            var sampleCounts = {};
-            var washerAvailPcts = {};
-            var dryerAvailPcts = {};
-            var washerInUseAvgs = {};
-            var dryerInUseAvgs = {};
-            var hasNoData = {};
+            function avg(arr) { return arr.length ? arr.reduce(function(a,b){ return a+b; }, 0) / arr.length : null; }
+            var scores = {};
             HOURS.forEach(function(H) {
-              var washerSamples = weekdayRows.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === H; });
-              if (useAllDayFallback) washerSamples = weekdayRows.filter(function(r) { return r.hour_pst === H; });
               var nextHour = (H + 1) % 24;
-              var dryerSamples = weekdayRows.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === nextHour; });
-              if (useAllDayFallback) dryerSamples = weekdayRows.filter(function(r) { return r.hour_pst === nextHour; });
-              var washerAvailPct = washerSamples.length > 0 ? 100 - mean(washerSamples.map(function(r) { return r.washer_utilization !== undefined ? r.washer_utilization : (r.washers_in_use / (r.washers_total || 1) * 100); })) : 50;
-              var dryerAvailPct = dryerSamples.length > 0 ? 100 - mean(dryerSamples.map(function(r) { return r.dryer_utilization !== undefined ? r.dryer_utilization : (r.dryers_in_use / (r.dryers_total || 1) * 100); })) : 50;
-              combined[H] = (washerAvailPct + dryerAvailPct) / 200;
-              sampleCounts[H] = washerSamples.length;
-              washerAvailPcts[H] = washerAvailPct;
-              dryerAvailPcts[H] = dryerAvailPct;
-              washerInUseAvgs[H] = washerSamples.length ? mean(washerSamples.map(function(r) { return r.washers_in_use; })) : 0;
-              dryerInUseAvgs[H] = dryerSamples.length ? mean(dryerSamples.map(function(r) { return r.dryers_in_use; })) : 0;
-              hasNoData[H] = washerSamples.length === 0;
+              var wSamples = history.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === H; });
+              var dSamples = history.filter(function(r) { return (r.day_of_week !== undefined ? r.day_of_week : 0) === pythonDow && r.hour_pst === nextHour; });
+              var wFallback = history.filter(function(r) { return r.hour_pst === H; });
+              var dFallback = history.filter(function(r) { return r.hour_pst === nextHour; });
+              var useFallback = wSamples.length < 2;
+              var wData = useFallback ? wFallback : wSamples;
+              var dData = useFallback ? dFallback : dSamples;
+              function getUtil(r) { return r.washer_utilization !== undefined ? r.washer_utilization : (r.washers_in_use / (r.washers_total || 1) * 100); }
+              function getDryerUtil(r) { return r.dryer_utilization !== undefined ? r.dryer_utilization : (r.dryers_in_use / (r.dryers_total || 1) * 100); }
+              var washerAvailPct = wData.length > 0 ? 100 - avg(wData.map(getUtil)) : 50;
+              var dryerAvailPct = dData.length > 0 ? 100 - avg(dData.map(getDryerUtil)) : 50;
+              var w = washerAvailPct / 100;
+              var d = dryerAvailPct / 100;
+              scores[H] = {
+                score: Math.pow(w, 1.5) * d,
+                washerAvail: Math.round(washerAvailPct),
+                dryerAvail: Math.round(dryerAvailPct),
+                sampleCount: wData.length,
+                usedFallback: useFallback
+              };
             });
 
             var futureHours = HOURS.slice(HOURS.indexOf(currentHour));
-            var bestHour = futureHours.length ? futureHours.reduce(function(a, b) { return (combined[a] || 0) >= (combined[b] || 0) ? a : b; }) : HOURS[0];
-            var bestScore = combined[bestHour] || 0;
+            var bestHour = futureHours.length ? futureHours.reduce(function(a, b) { return (scores[a].score || 0) >= (scores[b].score || 0) ? a : b; }) : HOURS[0];
+            var maxScore = scores[bestHour] ? scores[bestHour].score : 0;
 
-            var desc = bestScore > 0.75 ? 'Great time — machines are usually wide open' : bestScore >= 0.5 ? 'Decent time — usually a machine available' : 'Busy period — expect to wait';
+            var desc = maxScore > 0.6 ? 'Great time — machines are usually wide open' : maxScore > 0.35 ? 'Decent time — usually a machine available' : maxScore > 0.15 ? 'Somewhat busy — might need to wait a bit' : 'Peak hours — expect competition for machines';
             calloutEl.innerHTML = '<div class="time">' + (bestHour === 0 ? '12:00 AM' : bestHour < 12 ? bestHour + ':00 AM' : bestHour === 12 ? '12:00 PM' : (bestHour - 12) + ':00 PM') + '</div>' +
               '<div class="subtitle">' + desc + '</div>';
-            if (useAllDayFallback) calloutEl.innerHTML += '<div class="subtitle" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
+            if (scores[bestHour] && scores[bestHour].usedFallback) calloutEl.innerHTML += '<div class="subtitle" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
             fallbackEl.style.display = 'none';
             chartContainer.style.display = 'block';
 
-            var weeks = Math.round(history.length / (20 * 7));
-            var dataNote = history.length < 20 ? '1 day' : (weeks < 1 ? '1 week' : weeks + ' week' + (weeks > 1 ? 's' : ''));
+            var weeks = Math.round(history.length / (48 * 7));
+            var dataNote = history.length < 48 ? '1 day' : (weeks < 1 ? '1 week' : weeks + ' week' + (weeks > 1 ? 's' : ''));
             confidenceEl.textContent = 'Scores based on ' + dataNote + ' of data. More accurate over time.';
 
             var chartData = HOURS.map(function(h) {
-              return hasNoData[h] ? 0.5 : (combined[h] || 0);
+              return (scores[h] && scores[h].sampleCount > 0) ? scores[h].score : 0.5;
             });
-            var barColors = chartData.map(function(s, i) {
-              return scoreToColor(s);
-            });
-            var barOpacity = HOURS.map(function(h) {
-              return h < currentHour ? 0.4 : 1;
-            });
+            var barColors = chartData.map(function(s) { return scoreToColor(s); });
+            var barOpacity = HOURS.map(function(h) { return h < currentHour ? 0.4 : 1; });
             var bgColors = barColors.map(function(c, i) {
               return c.replace(/\)$/, ', ' + barOpacity[i] + ')').replace(/^rgb/, 'rgba');
             });
-            var borderColors = HOURS.map(function(h) {
-              return h === bestHour ? 'rgba(255, 176, 0, 0.9)' : 'transparent';
-            });
-            var borderWidths = HOURS.map(function(h) {
-              return h === bestHour ? 2 : 0;
-            });
+            var borderColors = HOURS.map(function(h) { return h === bestHour ? 'rgba(255, 176, 0, 0.9)' : 'transparent'; });
+            var borderWidths = HOURS.map(function(h) { return h === bestHour ? 2 : 0; });
 
             new Chart(document.getElementById('recommenderChart'), {
               type: 'bar',
@@ -522,14 +504,13 @@
                     callbacks: {
                       label: function(ctx) {
                         var h = HOURS[ctx.dataIndex];
-                        var lines = [
-                          'Score: ' + Math.round((chartData[ctx.dataIndex] || 0) * 100) + '%',
-                          'Washer availability: ' + Math.round(washerAvailPcts[h] || 0) + '% (avg ' + (washerInUseAvgs[h] !== undefined ? washerInUseAvgs[h].toFixed(1) : '?') + ' in use)',
-                          'Dryer availability 1hr later: ' + Math.round(dryerAvailPcts[h] || 0) + '% (avg ' + (dryerInUseAvgs[h] !== undefined ? dryerInUseAvgs[h].toFixed(1) : '?') + ' in use)',
-                          'Based on ' + (sampleCounts[h] || 0) + ' observations'
+                        var s = scores[h] || {};
+                        return [
+                          'Score: ' + Math.round((s.score || 0) * 100) + '%',
+                          'Washer avail: ' + (s.washerAvail || 0) + '%',
+                          'Dryer avail 1hr later: ' + (s.dryerAvail || 0) + '%',
+                          'Based on ' + (s.sampleCount || 0) + ' observations' + (s.usedFallback ? ' (all-day avg)' : '')
                         ];
-                        if (hasNoData[h]) lines.push('No data yet for this time slot');
-                        return lines;
                       }
                     }
                   }

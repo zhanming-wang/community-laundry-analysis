@@ -2,30 +2,7 @@ name: Laundry Poller
 
 on:
   schedule:
-    - cron: '0 8  * * *'   # 12am PST
-    - cron: '0 9  * * *'   # 1am  PST
-    - cron: '0 10 * * *'   # 2am  PST
-    - cron: '0 11 * * *'   # 3am  PST
-    - cron: '0 12 * * *'   # 4am  PST
-    - cron: '0 13 * * *'   # 5am  PST
-    - cron: '0 14 * * *'   # 6am  PST
-    - cron: '0 15 * * *'   # 7am  PST
-    - cron: '0 16 * * *'   # 8am  PST
-    - cron: '0 17 * * *'   # 9am  PST
-    - cron: '0 18 * * *'   # 10am PST
-    - cron: '0 19 * * *'   # 11am PST
-    - cron: '0 20 * * *'   # 12pm PST
-    - cron: '0 21 * * *'   # 1pm  PST
-    - cron: '0 22 * * *'   # 2pm  PST
-    - cron: '0 23 * * *'   # 3pm  PST
-    - cron: '0 0  * * *'   # 4pm  PST
-    - cron: '0 1  * * *'   # 5pm  PST
-    - cron: '0 2  * * *'   # 6pm  PST
-    - cron: '0 3  * * *'   # 7pm  PST
-    - cron: '0 4  * * *'   # 8pm  PST
-    - cron: '0 5  * * *'   # 9pm  PST
-    - cron: '0 6  * * *'   # 10pm PST
-    - cron: '0 7  * * *'   # 11pm PST
+    - cron: '0,30 * * * *'   # every 30 min, 24/7
   workflow_dispatch:
 
 jobs:
