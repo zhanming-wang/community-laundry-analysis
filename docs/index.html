@@ -154,6 +154,15 @@
     .machine-card .machine-card-bar-fill { height: 100%; border-radius: 3px; }
     .machine-card .machine-card-reason { font-size: 0.7rem; color: var(--text-muted); font-style: italic; margin-top: 0.5rem; }
     .machine-card-accumulating { background: var(--surface); border-color: var(--border); padding: 1rem; color: var(--text-dim); }
+    .status-card h2 { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .live-badge { font-size: 0.6rem; color: var(--green); background: rgba(0, 255, 65, 0.15); padding: 0.15rem 0.4rem; border-radius: 4px; display: none; }
+    .live-badge.visible { display: inline-block; }
+    .status-refreshed { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.35rem; display: none; }
+    .status-refreshed.visible { display: block; }
+    .washer-pickup-hints { margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-dim); }
+    .washer-pickup-hints div { margin-top: 0.25rem; }
+    .washer-pickup-hints .warn { color: var(--amber); }
+    .washer-pickup-hints .ok { color: var(--green); }
   </style>
 </head>
 <body>
@@ -165,7 +174,8 @@
     <div class="loading" id="loading">Loading…</div>
     <div id="content" style="display: none;">
       <div class="card status-card">
-        <h2>Right now</h2>
+        <h2>Right now <span class="live-badge" id="live-badge">Live</span></h2>
+        <div class="status-refreshed" id="status-refreshed">last refreshed: just now</div>
         <div class="machine-block" id="washers-block">
           <div class="label">Washers</div>
           <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
@@ -176,6 +186,7 @@
           <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
           <div class="status-pct" id="dryers-pct"></div>
         </div>
+        <div class="washer-pickup-hints" id="washer-pickup-hints"></div>
       </div>
 
       <div class="card chart-card">
@@ -294,12 +305,15 @@
       };
 
       var base = 'https://zhanming-wang.github.io/community-laundry-analysis';
+      var WORKER_URL = 'https://laundry.zhanming-wang.workers.dev/machines';
       Promise.all([
         fetch(base + '/summary.json').then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('Failed to load summary')); }),
-        fetch(base + '/alerts.json').then(function(r) { return r.ok ? r.json() : { model_status: 'accumulating', message: 'Building anomaly model...', machines: [] }; }).catch(function() { return { model_status: 'accumulating', message: 'Loading...', machines: [] }; })
+        fetch(base + '/alerts.json').then(function(r) { return r.ok ? r.json() : { model_status: 'accumulating', message: 'Building anomaly model...', machines: [] }; }).catch(function() { return { model_status: 'accumulating', message: 'Loading...', machines: [] }; }),
+        fetch(base + '/pickup_rates.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
       ]).then(function(arr) {
         var summary = arr[0];
         var alerts = arr[1];
+        var pickupRates = arr[2];
         loading.style.display = 'none';
         content.style.display = 'block';
 
@@ -357,6 +371,48 @@
           var dp = document.getElementById('dryers-pct');
           wp.textContent = (cur.washer_utilization !== undefined && cur.washer_utilization !== null ? cur.washer_utilization + '% utilized' : '');
           dp.textContent = (cur.dryer_utilization !== undefined && cur.dryer_utilization !== null ? cur.dryer_utilization + '% utilized' : '');
+
+          fetch(WORKER_URL).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
+            if (!liveMachines || !Array.isArray(liveMachines)) return;
+            var washers = liveMachines.filter(function(m) { return m.type === 'washer'; });
+            var dryers = liveMachines.filter(function(m) { return m.type === 'dryer'; });
+            var wFree = washers.filter(function(m) { return m.available; }).length;
+            var dFree = dryers.filter(function(m) { return m.available; }).length;
+            document.getElementById('washers-free').textContent = wFree;
+            document.getElementById('washers-in-use').textContent = washers.length - wFree;
+            document.getElementById('dryers-free').textContent = dFree;
+            document.getElementById('dryers-in-use').textContent = dryers.length - dFree;
+            var wTot = washers.length || 1;
+            var dTot = dryers.length || 1;
+            wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
+            dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
+            document.getElementById('live-badge').classList.add('visible');
+            document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
+            var hintsEl = document.getElementById('washer-pickup-hints');
+            hintsEl.innerHTML = '';
+            var rates = (pickupRates && pickupRates.washer_stranded_rate) || {};
+            var jsDow = new Date().getDay();
+            var pythonDow = (jsDow + 6) % 7;
+            var hourPst = (new Date().getUTCHours() - 8 + 24) % 24;
+            var dayKey = String(pythonDow);
+            var hourKey = String(hourPst);
+            washers.filter(function(m) { return m.available; }).forEach(function(m) {
+              var sticker = m.stickerNumber || m.sticker || '?';
+              var doorClosed = m.doorClosed === true || m.door_closed === true;
+              var rate = rates[dayKey] && rates[dayKey][hourKey] != null ? rates[dayKey][hourKey] : null;
+              var div = document.createElement('div');
+              if (doorClosed && rate != null && rate > 0.5) {
+                div.className = 'warn';
+                div.textContent = 'Washer #' + sticker + ' \u2713 Available \u26A0\uFE0F Likely has laundry inside (lid closed, ' + Math.round(rate * 100) + '% chance at this hour)';
+              } else if (!doorClosed) {
+                div.className = 'ok';
+                div.textContent = 'Washer #' + sticker + ' \u2713 Available \u2713 Probably empty (lid open)';
+              } else {
+                div.textContent = 'Washer #' + sticker + ' \u2713 Available';
+              }
+              hintsEl.appendChild(div);
+            });
+          }).catch(function() {});
 
           const history = summary.history || [];
           const hourData = avgUtilByHour(history);

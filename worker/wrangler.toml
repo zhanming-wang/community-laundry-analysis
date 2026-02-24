@@ -1,0 +1,6 @@
+name = "laundry"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# LOCATION_ID and ROOM_ID are set via: wrangler secret put LOCATION_ID / ROOM_ID
+# Do not put secrets in this file.

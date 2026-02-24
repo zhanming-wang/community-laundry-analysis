@@ -6,10 +6,11 @@ import pickle
 from datetime import datetime, timezone
 from sklearn.ensemble import IsolationForest
 
-MACHINES_FILE = "data/machines_log.csv"
-MODEL_FILE    = "models/isolation_forest.pkl"
-ALERTS_FILE   = "docs/alerts.json"
-MIN_ROWS      = 500  # ~3-4 days of data before training is meaningful
+MACHINES_FILE   = "data/machines_log.csv"
+MODEL_FILE      = "models/isolation_forest.pkl"
+ALERTS_FILE     = "docs/alerts.json"
+PICKUP_FILE     = "docs/pickup_rates.json"
+MIN_ROWS        = 500  # ~3-4 days of data before training is meaningful
 
 MODE_MAP = {"idle": 0, "running": 1, "pressStart": 2, "paused": 3}
 CONTROLLER_MAP = {"ACA": 0, "QPRO": 1}
@@ -76,7 +77,11 @@ def main():
         return
 
     df = pd.read_csv(MACHINES_FILE)
+    if "poll_type" in df.columns:
+        df = df[df["poll_type"].fillna("scheduled") == "scheduled"]
     total_rows = len(df)
+
+    write_pickup_rates(df)
 
     if total_rows < MIN_ROWS:
         remaining = MIN_ROWS - total_rows
@@ -175,6 +180,48 @@ def write_empty_alerts(message):
             "model_status": "accumulating",
             "message":      message,
             "machines":     [],
+        }, f, indent=2)
+
+
+def compute_pickup_rates(df):
+    """From scheduled washer rows: running → available transitions; next poll door_closed = stranded."""
+    washers = df[df["machine_type"] == "washer"].copy()
+    if washers.empty:
+        return {}
+    washers = washers.sort_values(["opaque_id", "timestamp"])
+    # events: (day_of_week, hour_pst, stranded)
+    events = []
+    for opaque_id, grp in washers.groupby("opaque_id"):
+        grp = grp.reset_index(drop=True)
+        for i in range(1, len(grp)):
+            prev = grp.iloc[i - 1]
+            curr = grp.iloc[i]
+            if prev["mode"] == "running" and curr["available"] == 1:
+                stranded = 1 if curr["door_closed"] == 1 else 0
+                events.append((int(curr["day_of_week"]), int(curr["hour_pst"]), stranded))
+    if not events:
+        return {}
+    by_dow_hour = {}
+    for d, h, stranded in events:
+        by_dow_hour.setdefault(d, {}).setdefault(h, {"stranded": 0, "total": 0})
+        by_dow_hour[d][h]["total"] += 1
+        by_dow_hour[d][h]["stranded"] += stranded
+    washer_stranded_rate = {}
+    for d, hours in by_dow_hour.items():
+        washer_stranded_rate[str(d)] = {
+            str(h): round(data["stranded"] / data["total"], 2)
+            for h, data in hours.items()
+        }
+    return washer_stranded_rate
+
+
+def write_pickup_rates(df):
+    rates = compute_pickup_rates(df)
+    os.makedirs("docs", exist_ok=True)
+    with open(PICKUP_FILE, "w") as f:
+        json.dump({
+            "generated_at":         datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "washer_stranded_rate": rates,
         }, f, indent=2)
 
 

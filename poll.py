@@ -23,6 +23,7 @@ def log_machines(machines, timestamp, hour_pst, minute, day_of_week):
             "hour_pst":              hour_pst,
             "minute":                minute,
             "day_of_week":           day_of_week,
+            "poll_type":             "scheduled",
             "opaque_id":             m.get("opaqueId", ""),
             "sticker":               m.get("stickerNumber", ""),
             "license_plate":         m.get("licensePlate", ""),
@@ -81,6 +82,7 @@ def main():
         "hour_pst":            hour_pst,
         "minute":              minute,
         "day_of_week":         now.weekday(),  # 0=Mon, 6=Sun
+        "poll_type":           "scheduled",
         "washers_free":        sum(1 for m in washers if m["available"]),
         "washers_in_use":      washers_in_use,
         "washers_total":       washer_total,
@@ -101,7 +103,7 @@ def main():
     if file_exists:
         with open(DATA_FILE, "r") as f:
             first_line = f.readline()
-        needs_migrate = "day_of_week" not in first_line or "washer_utilization" not in first_line or "minute" not in first_line
+        needs_migrate = "day_of_week" not in first_line or "washer_utilization" not in first_line or "minute" not in first_line or "poll_type" not in first_line
         if needs_migrate:
             with open(DATA_FILE, "r") as f:
                 all_rows = list(csv.DictReader(f))
@@ -130,6 +132,8 @@ def main():
                     atot = int(r.get("all_total", 0))
                     ause = int(r.get("all_in_use", 0))
                     r["overall_utilization"] = round(ause / atot * 100, 1) if atot > 0 else 0
+                if "poll_type" not in r or r.get("poll_type") == "":
+                    r["poll_type"] = "scheduled"
             with open(DATA_FILE, "w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=row.keys(), extrasaction="ignore")
                 writer.writeheader()
