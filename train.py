@@ -4,7 +4,10 @@ import json
 import os
 import pickle
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from sklearn.ensemble import IsolationForest
+
+LAX = ZoneInfo("America/Los_Angeles")
 
 MACHINES_FILE   = "data/machines_log.csv"
 MODEL_FILE      = "models/isolation_forest.pkl"
@@ -151,7 +154,7 @@ def main():
     machines_out.sort(key=lambda x: (order[x["status"]], x["sticker"]))
 
     alerts = {
-        "trained_at":   datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "trained_at":   datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S"),
         "total_rows":   total_rows,
         "model_status": "ok",
         "message":      None,
@@ -176,7 +179,7 @@ def write_empty_alerts(message):
     os.makedirs("docs", exist_ok=True)
     with open(ALERTS_FILE, "w") as f:
         json.dump({
-            "trained_at":   datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "trained_at":   datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S"),
             "model_status": "accumulating",
             "message":      message,
             "machines":     [],
@@ -220,7 +223,7 @@ def write_pickup_rates(df):
     os.makedirs("docs", exist_ok=True)
     with open(PICKUP_FILE, "w") as f:
         json.dump({
-            "generated_at":         datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "generated_at":         datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S"),
             "washer_stranded_rate": rates,
         }, f, indent=2)
 

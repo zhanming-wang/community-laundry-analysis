@@ -3,7 +3,9 @@ import csv
 import json
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
+LAX = ZoneInfo("America/Los_Angeles")
 LOCATION_ID = os.environ["LOCATION_ID"]
 ROOM_ID     = os.environ["ROOM_ID"]
 DATA_FILE     = "data/laundry_log.csv"
@@ -60,13 +62,14 @@ def get_machines():
     return requests.get(url, timeout=10).json()
 
 def main():
-    now       = datetime.now(timezone.utc)
-    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-    hour_pst  = (now.hour - 8) % 24
-    minute    = now.minute  # will be 0 or 30
+    now_lax   = datetime.now(LAX)
+    timestamp = now_lax.strftime("%Y-%m-%d %H:%M:%S")
+    hour_pst  = now_lax.hour
+    minute    = now_lax.minute
+    day_of_week = now_lax.weekday()  # 0=Mon, 6=Sun
 
     machines = get_machines()
-    log_machines(machines, timestamp, hour_pst, minute, now.weekday())
+    log_machines(machines, timestamp, hour_pst, minute, day_of_week)
     washers  = [m for m in machines if m["type"] == "washer"]
     dryers   = [m for m in machines if m["type"] == "dryer"]
 
@@ -81,7 +84,7 @@ def main():
         "timestamp":           timestamp,
         "hour_pst":            hour_pst,
         "minute":              minute,
-        "day_of_week":         now.weekday(),  # 0=Mon, 6=Sun
+        "day_of_week":         day_of_week,
         "poll_type":           "scheduled",
         "washers_free":        sum(1 for m in washers if m["available"]),
         "washers_in_use":      washers_in_use,
@@ -206,7 +209,7 @@ def main():
     with open(SUMMARY_FILE, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"[{timestamp} | {hour_pst}:00 PST] "
+    print(f"[{timestamp} LAX | {hour_pst}:00] "
           f"Washers: {row['washers_in_use']}/{row['washers_total']} in use | "
           f"Dryers: {row['dryers_in_use']}/{row['dryers_total']} in use")
 
