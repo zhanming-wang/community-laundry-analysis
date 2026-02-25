@@ -4,14 +4,27 @@
  * No secrets in this file.
  */
 const CSC_BASE = "https://mycscgo.com/api/v3";
-const CORS_ORIGIN = "https://zhanming-wang.github.io";
+const ALLOWED_ORIGINS = [
+  "https://zhanming-wang.github.io",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+];
+
+function corsOrigin(origin) {
+  if (origin && ALLOWED_ORIGINS.includes(origin)) return origin;
+  if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
+  return ALLOWED_ORIGINS[0];
+}
 
 export default {
   async fetch(request, env) {
+    const origin = request.headers.get("Origin") || "";
+    const allowOrigin = corsOrigin(origin);
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
-          "Access-Control-Allow-Origin": CORS_ORIGIN,
+          "Access-Control-Allow-Origin": allowOrigin,
           "Access-Control-Allow-Methods": "GET, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
           "Access-Control-Max-Age": "86400",
@@ -42,7 +55,7 @@ export default {
       status: res.status,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": CORS_ORIGIN,
+        "Access-Control-Allow-Origin": allowOrigin,
       },
     });
   },

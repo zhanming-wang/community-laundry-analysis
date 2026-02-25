@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Laundry Room Availability</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%2300ff41' width='32' height='32' rx='4'/></svg>" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27,8 +28,8 @@
       font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
       background: var(--bg);
       color: var(--text);
-      padding: 1rem;
-      font-size: 14px;
+      padding: clamp(0.75rem, 3vw, 1.5rem);
+      font-size: clamp(13px, 2vw, 15px);
     }
     body::before {
       content: '';
@@ -48,34 +49,57 @@
       z-index: 9999;
     }
     .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem 1rem;
       border-bottom: 1px solid var(--border);
       padding-bottom: 0.75rem;
       margin-bottom: 1.25rem;
     }
     .header h1 { font-size: 1rem; font-weight: 500; margin: 0.25rem 0 0 0; }
+    .header-refresh {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-align: right;
+      max-width: 320px;
+      display: none;
+    }
+    .header-refresh.visible { display: block; }
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       padding: 1rem 1.25rem;
       margin-bottom: 1rem;
     }
-    .status-card {
+    .dashboard-section { margin-bottom: 1.5rem; }
+    .status-cards-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 1rem;
-      max-width: 480px;
+      margin-bottom: 1.5rem;
     }
-    @media (max-width: 400px) {
-      .status-card { grid-template-columns: 1fr; }
+    @media (max-width: 520px) {
+      .status-cards-row { grid-template-columns: 1fr; }
     }
-    .status-card h2 {
-      font-size: 0.65rem;
+    .status-card-single {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      min-height: 0;
+    }
+    .status-card-single .label {
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.2em;
+      letter-spacing: 0.1em;
       color: var(--text-muted);
-      margin: 0 0 0.5rem 0;
-      grid-column: 1 / -1;
+      margin-bottom: 0.5rem;
     }
+    .status-card-single .counts { font-size: 1.25rem; font-weight: 600; }
+    .status-card-single .free { color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 65, 0.5); }
+    .status-card-single .in-use { color: var(--red); }
+    .status-card-single .status-pct { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.35rem; }
     .machine-block {
       padding: 0.75rem 1rem;
       border: 1px solid var(--border);
@@ -92,6 +116,7 @@
       height: 220px;
       margin-top: 0.5rem;
     }
+    .chart-container-compact { height: 240px; margin-top: 0.25rem; }
     .chart-container canvas {
       max-width: 100%;
     }
@@ -102,6 +127,72 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }
+    .util-charts-section { margin-bottom: 1.5rem; }
+    .util-charts-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .util-charts-toggle span {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .util-charts-toggle .toggle-group {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .util-charts-toggle .toggle-btn {
+      padding: 0.35rem 0.75rem;
+      font: inherit;
+      font-size: 0.75rem;
+      background: var(--surface);
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .util-charts-toggle .toggle-btn + .toggle-btn { border-left: 1px solid var(--border); }
+    .util-charts-toggle .toggle-btn.active { background: rgba(0, 255, 65, 0.15); color: var(--green); }
+    .recommender-two-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 520px) {
+      .recommender-two-cards { grid-template-columns: 1fr; }
+    }
+    .recommender-card-quietest .section-title,
+    .recommender-card-earliest .section-title { margin-bottom: 0.75rem; }
+    .recommender-single-callout .callout-value { font-size: 1.15rem; font-weight: 600; color: var(--amber); text-shadow: 0 0 10px rgba(255, 176, 0, 0.5); }
+    .recommender-card-quietest .recommender-single-callout .callout-value { color: var(--green); text-shadow: 0 0 10px rgba(0, 255, 65, 0.5); }
+    .recommender-card-quietest .recommender-single-callout .callout-hint { color: #00aa33; }
+    .recommender-card-earliest .recommender-single-callout .callout-value { color: #4DB8FF; text-shadow: 0 0 10px rgba(77, 184, 255, 0.5); }
+    .recommender-single-callout .callout-value-none { color: var(--text-dim); text-shadow: none; }
+    .recommender-single-callout .callout-hint { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.25rem; }
+    .recommender-inputs-block { margin-bottom: 1rem; }
+    .recommender-inputs {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .recommender-inputs label { font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.35rem; }
+    .recommender-inputs input[type="number"] {
+      width: 3.5rem; padding: 0.3rem 0.4rem; font: inherit; font-size: 0.85rem;
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      -moz-appearance: textfield;
+    }
+    .recommender-inputs input[type="number"]::-webkit-outer-spin-button,
+    .recommender-inputs input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .recommender-now { font-size: 0.85rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+    .recommender-now.ok { color: var(--green); }
+    .recommender-now.wait { color: var(--amber); }
+    .recommender-now .wait-time { font-weight: 600; color: var(--amber); }
     .last-updated {
       font-size: 0.7rem;
       color: var(--text-muted);
@@ -129,13 +220,6 @@
       margin-bottom: 1rem;
       background: rgba(0, 40, 0, 0.2);
     }
-    .recommender-callout .time {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--amber);
-      text-shadow: 0 0 12px rgba(255, 176, 0, 0.6);
-    }
-    .recommender-callout .subtitle { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
     .recommender-confidence { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.5rem; letter-spacing: 0.05em; }
     .machine-health-subtitle { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1rem; }
     .machine-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
@@ -154,11 +238,6 @@
     .machine-card .machine-card-bar-fill { height: 100%; border-radius: 3px; }
     .machine-card .machine-card-reason { font-size: 0.7rem; color: var(--text-muted); font-style: italic; margin-top: 0.5rem; }
     .machine-card-accumulating { background: var(--surface); border-color: var(--border); padding: 1rem; color: var(--text-dim); }
-    .status-card h2 { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .live-badge { font-size: 0.6rem; color: var(--green); background: rgba(0, 255, 65, 0.15); padding: 0.15rem 0.4rem; border-radius: 4px; display: none; }
-    .live-badge.visible { display: inline-block; }
-    .status-refreshed { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.35rem; display: none; }
-    .status-refreshed.visible { display: block; }
     .washer-pickup-hints { margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-dim); }
     .washer-pickup-hints div { margin-top: 0.25rem; }
     .washer-pickup-hints .warn { color: var(--amber); }
@@ -171,80 +250,124 @@
     .machine-list .machine-row .status.in-use { color: var(--red); }
     .machine-list .machine-row .status.available { color: var(--green); }
     .machine-list .machine-row .status.warn { color: var(--amber); }
-    .machines-table-wrap { margin-top: 1rem; overflow-x: auto; }
-    .machines-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    .machines-table-section {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      margin-top: 0;
+    }
+    .machines-table-section .section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin: 0 0 0.75rem 0;
+      font-weight: 600;
+    }
+    .machines-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .machines-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 0.75rem; }
     .machines-table th, .machines-table td { padding: 0.35rem 0.5rem; text-align: left; border: 1px solid var(--border); color: var(--text-dim); }
     .machines-table th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
     .machines-table tr:nth-child(even) { background: rgba(0, 30, 0, 0.15); }
     .machines-table .avail-yes { color: var(--green); }
     .machines-table .avail-no { color: var(--red); }
+    @media (max-width: 640px) {
+      .machines-table { font-size: 0.7rem; }
+      .machines-table th, .machines-table td { padding: 0.3rem 0.4rem; }
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>Laundry Room Availability</h1>
+    <div class="header-refresh" id="header-refresh"></div>
   </div>
 
   <div id="app">
     <div class="loading" id="loading">Loading…</div>
     <div id="content" style="display: none;">
-      <div class="card status-card">
-        <h2>Right now <span class="live-badge" id="live-badge">Live</span></h2>
-        <div class="status-refreshed" id="status-refreshed">last refreshed: just now</div>
-        <div class="machine-block" id="washers-block">
-          <div class="label">Washers</div>
-          <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
-          <div class="status-pct" id="washers-pct"></div>
+      <div id="recommender-section">
+        <div class="recommender-two-cards">
+          <div class="card recommender-card-quietest">
+            <h3 class="section-title">Quietest time today</h3>
+            <div id="quietest-callout" class="recommender-single-callout"></div>
+          </div>
+          <div class="card recommender-card-earliest">
+            <h3 class="section-title">Earliest for your load</h3>
+            <div class="recommender-inputs recommender-inputs-block">
+              <label>Washers <input type="number" id="input-washers" min="1" max="99" value="4" aria-label="Washers needed"></label>
+              <label>Dryers <input type="number" id="input-dryers" min="1" max="99" value="3" aria-label="Dryers needed"></label>
+            </div>
+            <div id="earliest-callout" class="recommender-single-callout"></div>
+          </div>
         </div>
-        <div class="machine-block" id="dryers-block">
-          <div class="label">Dryers</div>
-          <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
-          <div class="status-pct" id="dryers-pct"></div>
+        <div id="recommender-chart-container" class="chart-container chart-container-compact" style="display:none;">
+          <canvas id="recommenderChart"></canvas>
         </div>
-        <div class="machines-table-wrap" id="machines-table-wrap">
-          <div class="list-title" style="margin-bottom:0.4rem;">All machines (live)</div>
-          <table class="machines-table" id="machines-table">
-            <thead>
-              <tr>
-                <th>Type</th><th>#</th><th>Available</th><th>In service</th><th>Mode</th><th>Door closed</th><th>Time left</th><th>Not available reason</th><th>Settings</th>
-              </tr>
-            </thead>
-            <tbody id="machines-tbody">
-              <tr><td colspan="9" style="color: var(--text-muted);">Loading live data…</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <div id="recommender-fallback" style="display:none;"></div>
+        <div id="recommender-confidence" class="recommender-confidence"></div>
       </div>
 
-      <div class="card chart-card">
-        <h3>Average Utilization by Hour</h3>
-        <div class="chart-container"><canvas id="barChart"></canvas></div>
-      </div>
+      <section class="dashboard-section" aria-label="Live status">
+        <div class="status-cards-row">
+          <div class="card status-card-single">
+            <div class="label">Washers</div>
+            <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
+            <div class="status-pct" id="washers-pct"></div>
+          </div>
+          <div class="card status-card-single">
+            <div class="label">Dryers</div>
+            <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
+            <div class="status-pct" id="dryers-pct"></div>
+          </div>
+        </div>
+        <div class="machines-table-section" id="machines-table-wrap">
+          <h3 class="section-title">All machines (live)</h3>
+          <div class="machines-table-wrap">
+            <table class="machines-table" id="machines-table">
+              <thead>
+                <tr>
+                  <th>Type</th><th>#</th><th>Available</th><th>In service</th><th>Mode</th><th>Door closed</th><th>Time left</th><th>Not available reason</th><th>Settings</th>
+                </tr>
+              </thead>
+              <tbody id="machines-tbody">
+                <tr><td colspan="9" style="color: var(--text-muted);">Loading live data…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-      <div class="card chart-card">
-        <h3>Average Utilization by Weekday</h3>
-        <div class="chart-container"><canvas id="weekdayChart"></canvas></div>
-      </div>
+      <section class="util-charts-section" aria-label="Utilization charts">
+        <div class="util-charts-toggle">
+          <span>Show:</span>
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn active" data-mode="washer" aria-pressed="true">Washers</button>
+            <button type="button" class="toggle-btn" data-mode="dryer" aria-pressed="false">Dryers</button>
+            <button type="button" class="toggle-btn" data-mode="together" aria-pressed="false">Together</button>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Average Utilization by Hour</h3>
+          <div class="chart-container"><canvas id="barChart"></canvas></div>
+        </div>
 
-      <div class="card chart-card">
-        <h3>Utilization — Last 7 Days</h3>
-        <div class="chart-container"><canvas id="lineChart"></canvas></div>
-      </div>
+        <div class="card chart-card">
+          <h3>Average Utilization by Weekday</h3>
+          <div class="chart-container"><canvas id="weekdayChart"></canvas></div>
+        </div>
+
+        <div class="card chart-card">
+          <h3>Utilization — Last 7 Days</h3>
+          <div class="chart-container"><canvas id="lineChart"></canvas></div>
+        </div>
+      </section>
 
       <div class="card" id="machine-health-section">
         <h3 style="margin:0 0 0.5rem 0;">Machine Health</h3>
         <div id="machine-health-subtitle" class="machine-health-subtitle"></div>
         <div id="machine-panel" class="machine-panel"></div>
-      </div>
-
-      <div class="card" id="recommender-section">
-        <h3 style="margin:0 0 1rem 0;">Best Time to Do Laundry Today</h3>
-        <div id="recommender-callout" class="recommender-callout"></div>
-        <div id="recommender-chart-container" class="chart-container" style="display:none;">
-          <canvas id="recommenderChart"></canvas>
-        </div>
-        <div id="recommender-fallback" style="display:none;"></div>
-        <div id="recommender-confidence" class="recommender-confidence"></div>
       </div>
 
       <div class="last-updated" id="last-updated"></div>
@@ -281,12 +404,18 @@
         var dowMap = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
         return { hour: hour, dayOfWeek: dowMap[weekday] !== undefined ? dowMap[weekday] : 0 };
       }
-      function avgUtilByHour(history) {
+      function getUtilForMode(r, mode) {
+        if (mode === 'washer') return r.washer_utilization !== undefined ? r.washer_utilization : (r.washers_in_use / (r.washers_total || 1) * 100);
+        if (mode === 'dryer') return r.dryer_utilization !== undefined ? r.dryer_utilization : (r.dryers_in_use / (r.dryers_total || 1) * 100);
+        return r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
+      }
+      function avgUtilByHour(history, mode) {
+        mode = mode || 'together';
         const byHour = {};
         for (let h = 0; h < 24; h++) byHour[h] = { sum: 0, n: 0 };
         history.forEach(function(r) {
           const h = parseInt(r.hour_pst, 10);
-          const util = r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
+          const util = getUtilForMode(r, mode);
           if (byHour[h] !== undefined) {
             byHour[h].sum += util;
             byHour[h].n += 1;
@@ -297,24 +426,25 @@
         const samples = [];
         for (let h = 0; h < 24; h++) {
           labels.push(formatHour(h));
-          data.push(byHour[h].n > 0 ? Math.round(byHour[h].sum / byHour[h].n * 10) / 10 : 0);
+          data.push(byHour[h].n > 0 ? Math.round(byHour[h].sum / byHour[h].n * 10) / 10 : null);
           samples.push(byHour[h].n);
         }
         return { labels, data, samples };
       }
-      function avgUtilByWeekday(history) {
+      function avgUtilByWeekday(history, mode) {
+        mode = mode || 'together';
         var dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         var byDay = {};
         for (var d = 0; d < 7; d++) byDay[d] = { sum: 0, n: 0 };
         history.forEach(function(r) {
           var d = r.day_of_week !== undefined ? r.day_of_week : 0;
-          var util = r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
+          var util = getUtilForMode(r, mode);
           if (byDay[d] !== undefined) { byDay[d].sum += util; byDay[d].n += 1; }
         });
         var labels = [], data = [], samples = [];
         for (var d = 0; d < 7; d++) {
           labels.push(dayNames[d]);
-          data.push(byDay[d].n > 0 ? Math.round(byDay[d].sum / byDay[d].n * 10) / 10 : 0);
+          data.push(byDay[d].n > 0 ? Math.round(byDay[d].sum / byDay[d].n * 10) / 10 : null);
           samples.push(byDay[d].n);
         }
         return { labels, data, samples };
@@ -348,8 +478,79 @@
         var summary = arr[0];
         var alerts = arr[1];
         var pickupRates = arr[2];
+        var lastLive = { wFree: null, dFree: null, list: null };
+        var lastSummary = summary;
         loading.style.display = 'none';
         content.style.display = 'block';
+
+        function updateMyLoadResult() {
+          var el = document.getElementById('recommender-now');
+          if (!el) return;
+          var needW = parseInt(document.getElementById('input-washers').value, 10) || 4;
+          var needD = parseInt(document.getElementById('input-dryers').value, 10) || 3;
+          var wFree = lastLive.wFree;
+          var dFree = lastLive.dFree;
+          if (wFree == null || dFree == null) {
+            var cur = lastSummary && lastSummary.current;
+            if (cur && cur.washers_free != null && cur.dryers_free != null) {
+              wFree = cur.washers_free;
+              dFree = cur.dryers_free;
+            }
+          }
+          if (wFree == null || dFree == null) {
+            el.textContent = 'Right now: Loading live data…';
+            el.className = 'recommender-now';
+            return;
+          }
+          var needMoreW = Math.max(0, needW - wFree);
+          var needMoreD = Math.max(0, needD - dFree);
+          if (needMoreW === 0 && needMoreD === 0) {
+            el.textContent = 'Right now: You have enough washers and dryers to start.';
+            el.className = 'recommender-now ok';
+            return;
+          }
+          var parts = [];
+          if (needMoreW > 0) parts.push(needMoreW + ' more washer' + (needMoreW > 1 ? 's' : ''));
+          if (needMoreD > 0) parts.push(needMoreD + ' more dryer' + (needMoreD > 1 ? 's' : ''));
+          function parseTime(m) {
+            if (!m) return 0;
+            var v = m.timeRemaining != null ? m.timeRemaining : m.time_remaining;
+            if (v === undefined || v === null) return 0;
+            return parseInt(String(v), 10) || 0;
+          }
+          var maxWait = 0;
+          if (lastLive.list) {
+            function typeIs(m, t) { var s = String(m && (m.type || m.Type) || '').toLowerCase(); return s === t; }
+            function isAvailable(m) { return m && (m.available === true || m.available === 1 || m.available === 'true'); }
+            if (needMoreW > 0) {
+              lastLive.list.filter(function(m) { return typeIs(m, 'washer') && !isAvailable(m); }).forEach(function(m) {
+                var t = parseTime(m);
+                if (t > maxWait) maxWait = t;
+              });
+            }
+            if (needMoreD > 0) {
+              lastLive.list.filter(function(m) { return typeIs(m, 'dryer') && !isAvailable(m); }).forEach(function(m) {
+                var t = parseTime(m);
+                if (t > maxWait) maxWait = t;
+              });
+            }
+          }
+          el.className = 'recommender-now wait';
+          if (maxWait > 0) {
+            el.innerHTML = 'Right now: Need ' + parts.join(' and ') + '. <span class="wait-time">Estimated wait: ~' + maxWait + ' min</span> (longest cycle in progress).';
+          } else {
+            el.textContent = 'Right now: Need ' + parts.join(' and ') + '. Check back in a few minutes.';
+          }
+        }
+        var iw = document.getElementById('input-washers');
+        var id_ = document.getElementById('input-dryers');
+        function onRecommenderInputsChange() {
+          updateMyLoadResult();
+          if (typeof renderRecommender === 'function') renderRecommender();
+        }
+        if (iw) { iw.addEventListener('input', onRecommenderInputsChange); iw.addEventListener('change', onRecommenderInputsChange); }
+        if (id_) { id_.addEventListener('input', onRecommenderInputsChange); id_.addEventListener('change', onRecommenderInputsChange); }
+        updateMyLoadResult();
 
         function renderMachinePanel(alerts) {
           var container = document.getElementById('machine-panel');
@@ -418,7 +619,9 @@
               try {
                 var ta = safeStr(a && (a.type || a.Type)).toLowerCase();
                 var tb = safeStr(b && (b.type || b.Type)).toLowerCase();
-                if (ta !== tb) return ta > tb ? 1 : -1;
+                var orderA = (ta === 'washer' ? 0 : 1);
+                var orderB = (tb === 'washer' ? 0 : 1);
+                if (orderA !== orderB) return orderA - orderB;
                 var na = Number(a && (a.stickerNumber != null ? a.stickerNumber : a.sticker)) || 0;
                 var nb = Number(b && (b.stickerNumber != null ? b.stickerNumber : b.sticker)) || 0;
                 return na - nb;
@@ -495,10 +698,12 @@
               function isAvailable(m) { return m && (m.available === true || m.available === 1 || m.available === 'true' || m.Available === true); }
               var washers = list.filter(function(m) { return m && typeIs(m, 'washer'); });
               var dryers = list.filter(function(m) { return m && typeIs(m, 'dryer'); });
-              var lb = document.getElementById('live-badge');
-              var sr = document.getElementById('status-refreshed');
-              if (lb) lb.classList.add('visible');
-              if (sr) { sr.classList.add('visible'); sr.textContent = 'last refreshed: just now'; }
+              var hr = document.getElementById('header-refresh');
+              if (hr) {
+                var laxTime = new Date().toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true });
+                hr.textContent = 'Last refreshed at ' + laxTime + ' (LAX). Refresh the page to get latest data.';
+                hr.classList.add('visible');
+              }
               renderMachinesTable(list);
               var wFree = washers.filter(isAvailable).length;
               var dFree = dryers.filter(isAvailable).length;
@@ -510,6 +715,10 @@
               var dTot = dryers.length || 1;
               if (wp) wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
               if (dp) dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
+              lastLive.wFree = wFree;
+              lastLive.dFree = dFree;
+              lastLive.list = list;
+              updateMyLoadResult();
             } catch (err) {
               console.error('Worker response handling', err);
               var tbody = document.getElementById('machines-tbody');
@@ -522,14 +731,46 @@
           });
 
           const history = summary.history || [];
-          const hourData = avgUtilByHour(history);
-          new Chart(document.getElementById('barChart'), {
+          var utilChartMode = 'washer';
+          var lastHourData, lastWeekdayData, lastTsLabels, lastTsFull, lastUtilData;
+
+          function updateUtilCharts(mode) {
+            utilChartMode = mode;
+            lastHourData = avgUtilByHour(history, mode);
+            lastWeekdayData = avgUtilByWeekday(history, mode);
+            lastTsLabels = history.map(function(r) { return formatTimestampShort(r.timestamp); });
+            lastTsFull = history.map(function(r) { return r.timestamp; });
+            lastUtilData = history.map(function(r) { return getUtilForMode(r, mode); });
+            if (barChartInst) {
+              barChartInst.data.labels = lastHourData.labels;
+              barChartInst.data.datasets[0].data = lastHourData.data;
+              barChartInst.update();
+            }
+            if (weekdayChartInst) {
+              weekdayChartInst.data.labels = lastWeekdayData.labels;
+              weekdayChartInst.data.datasets[0].data = lastWeekdayData.data;
+              weekdayChartInst.update();
+            }
+            if (lineChartInst) {
+              lineChartInst.data.labels = lastTsLabels;
+              lineChartInst.data.datasets[0].data = lastUtilData;
+              lineChartInst.update();
+            }
+          }
+
+          lastHourData = avgUtilByHour(history, 'washer');
+          lastWeekdayData = avgUtilByWeekday(history, 'washer');
+          lastTsLabels = history.map(function(r) { return formatTimestampShort(r.timestamp); });
+          lastTsFull = history.map(function(r) { return r.timestamp; });
+          lastUtilData = history.map(function(r) { return getUtilForMode(r, 'washer'); });
+
+          var barChartInst = new Chart(document.getElementById('barChart'), {
             type: 'bar',
             data: {
-              labels: hourData.labels,
+              labels: lastHourData.labels,
               datasets: [{
                 label: 'Avg utilization',
-                data: hourData.data,
+                data: lastHourData.data,
                 backgroundColor: 'rgba(0, 255, 65, 0.5)',
                 hoverBackgroundColor: 'rgba(0, 255, 65, 0.8)'
               }]
@@ -548,7 +789,10 @@
                     title: function(items) { return 'Hour: ' + (items[0] && items[0].label) + ''; },
                     label: function(ctx) {
                       var i = ctx.dataIndex;
-                      return ['Avg utilization: ' + hourData.data[i] + '%', 'Based on ' + hourData.samples[i] + ' samples'];
+                      var v = lastHourData && lastHourData.data[i];
+                      var n = lastHourData && lastHourData.samples[i];
+                      if (v == null || n === 0) return ['No data for this hour'];
+                      return ['Avg utilization: ' + v + '%', 'Based on ' + n + ' samples'];
                     }
                   }
                 }
@@ -556,14 +800,13 @@
             }
           });
 
-          const weekdayData = avgUtilByWeekday(history);
-          new Chart(document.getElementById('weekdayChart'), {
+          var weekdayChartInst = new Chart(document.getElementById('weekdayChart'), {
             type: 'bar',
             data: {
-              labels: weekdayData.labels,
+              labels: lastWeekdayData.labels,
               datasets: [{
                 label: 'Avg utilization',
-                data: weekdayData.data,
+                data: lastWeekdayData.data,
                 backgroundColor: 'rgba(0, 255, 65, 0.5)',
                 hoverBackgroundColor: 'rgba(0, 255, 65, 0.8)'
               }]
@@ -579,10 +822,13 @@
                 ...chartOptions.plugins,
                 tooltip: {
                   callbacks: {
-                    title: function(items) { return (items[0] && items[0].label) || ''; },
+                    title: function(items) { return 'Day: ' + ((items[0] && items[0].label) || ''); },
                     label: function(ctx) {
                       var i = ctx.dataIndex;
-                      return ['Avg utilization: ' + weekdayData.data[i] + '%', 'Based on ' + weekdayData.samples[i] + ' samples'];
+                      var v = lastWeekdayData && lastWeekdayData.data[i];
+                      var n = lastWeekdayData && lastWeekdayData.samples[i];
+                      if (v == null || n === 0) return ['No data for this day'];
+                      return ['Avg utilization: ' + v + '%', 'Based on ' + n + ' samples'];
                     }
                   }
                 }
@@ -590,18 +836,13 @@
             }
           });
 
-          const tsLabels = history.map(function(r) { return formatTimestampShort(r.timestamp); });
-          const tsFull = history.map(function(r) { return r.timestamp; });
-          const utilData = history.map(function(r) {
-            return r.overall_utilization !== undefined ? r.overall_utilization : (r.all_in_use / (r.all_total || 1) * 100);
-          });
-          new Chart(document.getElementById('lineChart'), {
+          var lineChartInst = new Chart(document.getElementById('lineChart'), {
             type: 'line',
             data: {
-              labels: tsLabels,
+              labels: lastTsLabels,
               datasets: [{
                 label: 'Utilization',
-                data: utilData,
+                data: lastUtilData,
                 borderColor: '#00ff41',
                 backgroundColor: 'rgba(0, 255, 65, 0.15)',
                 fill: true,
@@ -622,8 +863,8 @@
                 tooltip: {
                   callbacks: {
                     label: function(ctx) {
-                      var ts = tsFull[ctx.dataIndex] || '';
-                      return ts + ': ' + utilData[ctx.dataIndex] + '% in use';
+                      var ts = (lastTsFull && lastTsFull[ctx.dataIndex]) || '';
+                      return ts + ': ' + (lastUtilData && lastUtilData[ctx.dataIndex]) + '% in use';
                     }
                   }
                 }
@@ -631,21 +872,38 @@
             }
           });
 
-          (function renderRecommender() {
+          document.querySelectorAll('.util-charts-toggle .toggle-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var mode = this.getAttribute('data-mode');
+              document.querySelectorAll('.util-charts-toggle .toggle-btn').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+                b.setAttribute('aria-pressed', b.getAttribute('data-mode') === mode ? 'true' : 'false');
+              });
+              updateUtilCharts(mode);
+            });
+          });
+
+          function renderRecommender() {
             const HOURS = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
+            var needW = parseInt(document.getElementById('input-washers').value, 10) || 4;
+            var needD = parseInt(document.getElementById('input-dryers').value, 10) || 3;
             var lax = getLaxTime();
             const pythonDow = lax.dayOfWeek;
             const currentHour = lax.hour;
+            const currentMinute = parseInt(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', minute: '2-digit', hour12: false }).format(new Date()), 10) || 0;
             const hourLabels = HOURS.map(function(h) {
               var lbl = formatHour(h);
               return (h === currentHour ? lbl + ' \u25BC now' : lbl);
             });
-            const calloutEl = document.getElementById('recommender-callout');
+            const quietestEl = document.getElementById('quietest-callout');
+            const earliestEl = document.getElementById('earliest-callout');
             const chartContainer = document.getElementById('recommender-chart-container');
             const fallbackEl = document.getElementById('recommender-fallback');
             const confidenceEl = document.getElementById('recommender-confidence');
             const wt = cur.washers_total || 5;
             const dt = cur.dryers_total || 10;
+            var minWasherPct = wt > 0 ? (needW / wt) * 100 : 100;
+            var minDryerPct = dt > 0 ? (needD / dt) * 100 : 100;
 
             function scoreToColor(score) {
               if (score < 0.5) {
@@ -658,7 +916,8 @@
             }
 
             if (!history.length || history.length < 3) {
-              calloutEl.innerHTML = '<div class="subtitle">Check back after a few days of data collection</div>';
+              if (quietestEl) quietestEl.innerHTML = '<div class="callout-hint">Check back after a few days of data collection</div>';
+              if (earliestEl) earliestEl.innerHTML = '<div class="callout-hint">Check back after a few days of data collection</div>';
               fallbackEl.style.display = 'none';
               chartContainer.style.display = 'none';
               confidenceEl.textContent = '';
@@ -692,32 +951,186 @@
             });
 
             var futureHours = HOURS.slice(HOURS.indexOf(currentHour));
+            var earliestHour = null;
+            for (var i = 0; i < futureHours.length; i++) {
+              var H = futureHours[i];
+              var s = scores[H] || {};
+              if ((s.washerAvail || 0) >= minWasherPct && (s.dryerAvail || 0) >= minDryerPct) {
+                earliestHour = H;
+                break;
+              }
+            }
             var bestHour = futureHours.length ? futureHours.reduce(function(a, b) { return (scores[a].score || 0) >= (scores[b].score || 0) ? a : b; }) : HOURS[0];
-            var maxScore = scores[bestHour] ? scores[bestHour].score : 0;
+            var displayHour = earliestHour !== null ? earliestHour : bestHour;
 
-            var desc = maxScore > 0.6 ? 'Great time — machines are usually wide open' : maxScore > 0.35 ? 'Decent time — usually a machine available' : maxScore > 0.15 ? 'Somewhat busy — might need to wait a bit' : 'Peak hours — expect competition for machines';
-            calloutEl.innerHTML = '<div class="time">' + (bestHour === 0 ? '12:00 AM' : bestHour < 12 ? bestHour + ':00 AM' : bestHour === 12 ? '12:00 PM' : (bestHour - 12) + ':00 PM') + '</div>' +
-              '<div class="subtitle">' + desc + '</div>';
-            if (scores[bestHour] && scores[bestHour].usedFallback) calloutEl.innerHTML += '<div class="subtitle" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
+            function hourToTimeStr(h) {
+              return h === 0 ? '12:00 AM' : h < 12 ? h + ':00 AM' : h === 12 ? '12:00 PM' : (h - 12) + ':00 PM';
+            }
+            var nowLaxStr = new Date().toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true });
+            var earliestTimeStr = null;
+            if (earliestHour !== null) {
+              earliestTimeStr = (earliestHour === currentHour) ? ('Now (' + nowLaxStr + ')') : hourToTimeStr(earliestHour);
+            }
+            var bestTimeStr = hourToTimeStr(bestHour);
+
+            var quietestHtml = '<div class="callout-value">' + bestTimeStr + '</div><div class="callout-hint">Historically best availability (lowest use)</div>';
+            var earliestHtml = '';
+            if (earliestTimeStr !== null) {
+              earliestHtml = '<div class="callout-value">' + earliestTimeStr + '</div><div class="callout-hint">First time today history suggests enough machines free</div>';
+            } else {
+              earliestHtml = '<div class="callout-value callout-value-none">None</div><div class="callout-hint">No slot today for ' + needW + ' washer' + (needW !== 1 ? 's' : '') + ' + ' + needD + ' dryer' + (needD !== 1 ? 's' : '') + '; try fewer or check live counts above</div>';
+            }
+            if (scores[displayHour] && scores[displayHour].usedFallback) {
+              quietestHtml += '<div class="callout-hint" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
+              earliestHtml += '<div class="callout-hint" style="margin-top:0.5rem;">Using all-day averages (not enough weekday data yet)</div>';
+            }
+            if (quietestEl) quietestEl.innerHTML = quietestHtml;
+            if (earliestEl) earliestEl.innerHTML = earliestHtml;
             fallbackEl.style.display = 'none';
             chartContainer.style.display = 'block';
 
             var weeks = Math.round(history.length / (48 * 7));
             var dataNote = history.length < 48 ? '1 day' : (weeks < 1 ? '1 week' : weeks + ' week' + (weeks > 1 ? 's' : ''));
-            confidenceEl.textContent = 'Scores based on ' + dataNote + ' of data. More accurate over time.';
+            confidenceEl.textContent = 'Scores based on ' + dataNote + ' of data. Green arrow = Quietest; blue arrow = Earliest for your load.';
 
             var chartData = HOURS.map(function(h) {
               return (scores[h] && scores[h].sampleCount > 0) ? scores[h].score : 0.5;
             });
             var barColors = chartData.map(function(s) { return scoreToColor(s); });
-            var barOpacity = HOURS.map(function(h) { return h < currentHour ? 0.4 : 1; });
-            var bgColors = barColors.map(function(c, i) {
-              return c.replace(/\)$/, ', ' + barOpacity[i] + ')').replace(/^rgb/, 'rgba');
+            var greyPast = 'rgba(80, 80, 80, 0.5)';
+            var bgColors = HOURS.map(function(h, i) {
+              return h < currentHour ? greyPast : barColors[i];
             });
-            var borderColors = HOURS.map(function(h) { return h === bestHour ? 'rgba(255, 176, 0, 0.9)' : 'transparent'; });
-            var borderWidths = HOURS.map(function(h) { return h === bestHour ? 2 : 0; });
+            var earliestForLoadHour = earliestHour !== null ? earliestHour : null;
+            var borderColors = HOURS.map(function() { return 'transparent'; });
+            var borderWidths = HOURS.map(function() { return 0; });
 
-            new Chart(document.getElementById('recommenderChart'), {
+            if (!window.recommenderNowLinePlugin) {
+              window.recommenderNowLinePlugin = {
+                id: 'nowLine',
+                afterDatasetsDraw: function(chart) {
+                  var opts = chart.options.plugins && chart.options.plugins.nowLine;
+                  if (!opts || opts.currentHour == null || !opts.hourLabels) return;
+                  var ctx = chart.ctx;
+                  var xScale = chart.scales.x;
+                  var currLabel = opts.hourLabels[opts.currentHour];
+                  if (currLabel == null) return;
+                  var prevHour = (opts.currentHour + 23) % 24;
+                  var nextHour = (opts.currentHour + 1) % 24;
+                  var centerPrev = xScale.getPixelForValue(opts.hourLabels[prevHour]);
+                  var centerCurr = xScale.getPixelForValue(currLabel);
+                  var centerNext = xScale.getPixelForValue(opts.hourLabels[nextHour]);
+                  if (centerCurr === undefined || isNaN(centerCurr)) return;
+                  var barLeft = (centerPrev + centerCurr) / 2;
+                  var barRight = (centerCurr + centerNext) / 2;
+                  var minute = Math.min(59, Math.max(0, opts.currentMinute != null ? opts.currentMinute : 0));
+                  var x = barLeft + (minute / 60) * (barRight - barLeft);
+                  var top = chart.chartArea.top;
+                  var bottom = chart.chartArea.bottom;
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.strokeStyle = 'rgba(0, 255, 65, 0.85)';
+                  ctx.lineWidth = 2;
+                  ctx.setLineDash([4, 4]);
+                  ctx.moveTo(x, top);
+                  ctx.lineTo(x, bottom);
+                  ctx.stroke();
+                  ctx.restore();
+                }
+              };
+              Chart.register(window.recommenderNowLinePlugin);
+            }
+            if (!window.recommenderArrowsPlugin) {
+              window.recommenderArrowsPlugin = {
+                id: 'recommenderArrows',
+                afterDatasetsDraw: function(chart) {
+                  var opts = chart.options.plugins && chart.options.plugins.recommenderArrows;
+                  if (!opts || !opts.hourLabels) return;
+                  var bestHour = opts.bestHour;
+                  var earliestHour = opts.earliestForLoadHour;
+                  var currentHour = opts.currentHour;
+                  var currentMinute = Math.min(59, Math.max(0, opts.currentMinute != null ? opts.currentMinute : 0));
+                  var xScale = chart.scales.x;
+                  var top = chart.chartArea.top;
+                  var arrowH = 14;
+                  var labelGap = 6;
+                  var ctx = chart.ctx;
+                  var font = '11px "JetBrains Mono", monospace';
+                  ctx.font = font;
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'bottom';
+                  function getNowLineX() {
+                    var currLabel = opts.hourLabels[currentHour];
+                    if (currLabel == null) return NaN;
+                    var prevHour = (currentHour + 23) % 24;
+                    var nextHour = (currentHour + 1) % 24;
+                    var centerPrev = xScale.getPixelForValue(opts.hourLabels[prevHour]);
+                    var centerCurr = xScale.getPixelForValue(currLabel);
+                    var centerNext = xScale.getPixelForValue(opts.hourLabels[nextHour]);
+                    var barLeft = (centerPrev + centerCurr) / 2;
+                    var barRight = (centerCurr + centerNext) / 2;
+                    return barLeft + (currentMinute / 60) * (barRight - barLeft);
+                  }
+                  function drawArrow(x, color, label) {
+                    if (x === undefined || isNaN(x)) return;
+                    ctx.save();
+                    var labelY = top - arrowH - labelGap;
+                    ctx.fillStyle = color;
+                    ctx.fillText(label, x, labelY);
+                    ctx.fillStyle = color;
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x, top);
+                    ctx.lineTo(x - 7, top - arrowH);
+                    ctx.lineTo(x + 7, top - arrowH);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                  }
+                  if (bestHour != null && bestHour >= currentHour) {
+                    var xBest = (bestHour === currentHour) ? getNowLineX() : xScale.getPixelForValue(opts.hourLabels[bestHour]);
+                    drawArrow(xBest, '#00ff41', 'Quietest');
+                  }
+                  if (earliestHour != null && earliestHour >= currentHour) {
+                    var xEarliest = (earliestHour === currentHour) ? getNowLineX() : xScale.getPixelForValue(opts.hourLabels[earliestHour]);
+                    drawArrow(xEarliest, '#4DB8FF', 'Earliest for your load');
+                  }
+                }
+              };
+              Chart.register(window.recommenderArrowsPlugin);
+            }
+            if (!window.recommenderBarDividersPlugin) {
+              window.recommenderBarDividersPlugin = {
+                id: 'barDividers',
+                afterDatasetsDraw: function(chart) {
+                  if (chart.config.type !== 'bar' || !chart.data.labels || chart.data.labels.length < 2) return;
+                  var xScale = chart.scales.x;
+                  var yScale = chart.scales.y;
+                  var barTop = yScale.getPixelForValue(yScale.max);
+                  var barBottom = yScale.getPixelForValue(yScale.min);
+                  var ctx = chart.ctx;
+                  ctx.save();
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                  ctx.lineWidth = 1;
+                  for (var i = 0; i < chart.data.labels.length - 1; i++) {
+                    var x0 = xScale.getPixelForValue(chart.data.labels[i]);
+                    var x1 = xScale.getPixelForValue(chart.data.labels[i + 1]);
+                    var x = (x0 + x1) / 2;
+                    if (isNaN(x)) continue;
+                    ctx.beginPath();
+                    ctx.moveTo(x, barTop);
+                    ctx.lineTo(x, barBottom);
+                    ctx.stroke();
+                  }
+                  ctx.restore();
+                }
+              };
+              Chart.register(window.recommenderBarDividersPlugin);
+            }
+            if (window.recommenderChartInst) window.recommenderChartInst.destroy();
+            window.recommenderChartInst = new Chart(document.getElementById('recommenderChart'), {
               type: 'bar',
               data: {
                 labels: hourLabels,
@@ -732,8 +1145,14 @@
               options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: { padding: { top: 48 } },
+                datasets: {
+                  bar: { barPercentage: 1, categoryPercentage: 1 }
+                },
                 plugins: {
                   legend: { display: false },
+                  nowLine: { currentHour: currentHour, currentMinute: currentMinute, hourLabels: hourLabels },
+                  recommenderArrows: { bestHour: bestHour, earliestForLoadHour: earliestForLoadHour, currentHour: currentHour, currentMinute: currentMinute, hourLabels: hourLabels },
                   tooltip: {
                     callbacks: {
                       label: function(ctx) {
@@ -751,8 +1170,8 @@
                 },
                 scales: {
                   x: {
-                    grid: { color: 'rgba(0, 255, 65, 0.1)' },
-                    ticks: { color: '#006622', maxTicksLimit: 20, font: { family: "'JetBrains Mono', monospace" } }
+                    grid: { display: false },
+                    ticks: { color: '#006622', maxTicksLimit: 24, font: { family: "'JetBrains Mono', monospace", size: 10 } }
                   },
                   y: {
                     min: 0,
@@ -763,7 +1182,8 @@
                 }
               }
             });
-          })();
+          }
+          renderRecommender();
         })
         .catch(function(err) {
           console.error('Failed to load summary.json:', err);
