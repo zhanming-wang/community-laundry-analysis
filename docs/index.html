@@ -495,8 +495,10 @@
               function isAvailable(m) { return m && (m.available === true || m.available === 1 || m.available === 'true' || m.Available === true); }
               var washers = list.filter(function(m) { return m && typeIs(m, 'washer'); });
               var dryers = list.filter(function(m) { return m && typeIs(m, 'dryer'); });
-              document.getElementById('live-badge').classList.add('visible');
-              document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
+              var lb = document.getElementById('live-badge');
+              var sr = document.getElementById('status-refreshed');
+              if (lb) lb.classList.add('visible');
+              if (sr) { sr.classList.add('visible'); sr.textContent = 'last refreshed: just now'; }
               renderMachinesTable(list);
               var wFree = washers.filter(isAvailable).length;
               var dFree = dryers.filter(isAvailable).length;
@@ -506,8 +508,8 @@
               document.getElementById('dryers-in-use').textContent = dryers.length - dFree;
               var wTot = washers.length || 1;
               var dTot = dryers.length || 1;
-              wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
-              dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
+              if (wp) wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
+              if (dp) dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
             } catch (err) {
               console.error('Worker response handling', err);
               var tbody = document.getElementById('machines-tbody');
