@@ -408,91 +408,115 @@
 
           function renderMachinesTable(list) {
             var tbody = document.getElementById('machines-tbody');
-            if (!list || list.length === 0) {
+            if (!tbody) return;
+            if (!list || !Array.isArray(list) || list.length === 0) {
               tbody.innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">No live data</td></tr>';
               return;
             }
+            function safeStr(v) { return v === undefined || v === null ? '' : String(v); }
             function byTypeThenSticker(a, b) {
-              var ta = String(a.type || a.Type || '').toLowerCase();
-              var tb = String(b.type || b.Type || '').toLowerCase();
-              if (ta !== tb) return ta > tb ? 1 : -1;
-              return (Number(a.stickerNumber != null ? a.stickerNumber : a.sticker) || 0) - (Number(b.stickerNumber != null ? b.stickerNumber : b.sticker) || 0);
+              try {
+                var ta = safeStr(a && (a.type || a.Type)).toLowerCase();
+                var tb = safeStr(b && (b.type || b.Type)).toLowerCase();
+                if (ta !== tb) return ta > tb ? 1 : -1;
+                var na = Number(a && (a.stickerNumber != null ? a.stickerNumber : a.sticker)) || 0;
+                var nb = Number(b && (b.stickerNumber != null ? b.stickerNumber : b.sticker)) || 0;
+                return na - nb;
+              } catch (e) { return 0; }
             }
-            var sorted = list.slice().sort(byTypeThenSticker);
-            function val(m, key, key2) { var v = m[key]; if (v === undefined && key2) v = m[key2]; return v === undefined || v === null ? '' : v; }
+            var sorted = list.filter(function(m) { return m && typeof m === 'object'; }).slice().sort(byTypeThenSticker);
+            function val(m, key, key2) { if (!m) return ''; var v = m[key]; if (v === undefined && key2) v = m[key2]; return v === undefined || v === null ? '' : String(v); }
             function settingsStr(m) {
-              var s = m.settings || m.Settings || {};
-              var parts = [];
-              if (s.cycle || s.Cycle) parts.push('cycle: ' + (s.cycle || s.Cycle));
-              if (s.soil || s.Soil) parts.push('soil: ' + (s.soil || s.Soil));
-              if (s.washerTemp || s.washer_temp) parts.push('washT: ' + (s.washerTemp || s.washer_temp));
-              if (s.dryerTemp || s.dryer_temp) parts.push('dryT: ' + (s.dryerTemp || s.dryer_temp));
-              if (m.display || m.Display) parts.push(m.display || m.Display);
-              return parts.length ? parts.join('; ') : '—';
+              if (!m) return '—';
+              try {
+                var s = m.settings || m.Settings;
+                if (typeof s !== 'object' || s === null) s = {};
+                var parts = [];
+                if (s.cycle || s.Cycle) parts.push('cycle: ' + (s.cycle || s.Cycle));
+                if (s.soil || s.Soil) parts.push('soil: ' + (s.soil || s.Soil));
+                if (s.washerTemp || s.washer_temp) parts.push('washT: ' + (s.washerTemp || s.washer_temp));
+                if (s.dryerTemp || s.dryer_temp) parts.push('dryT: ' + (s.dryerTemp || s.dryer_temp));
+                if (m.display || m.Display) parts.push(String(m.display || m.Display));
+                return parts.length ? parts.join('; ') : '—';
+              } catch (e) { return '—'; }
             }
             tbody.innerHTML = '';
             sorted.forEach(function(m) {
-              var type = String(m.type || m.Type || '').toLowerCase() || '—';
-              var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '—');
-              var avail = m.available === true || m.available === 1 || m.available === 'true' || m.Available === true;
-              var inSvc = m.inService !== undefined && m.inService !== null && m.inService !== false && m.inService !== '' || m.in_service === true || m.in_service === 1;
-              var mode = val(m, 'mode', 'Mode') || '—';
-              var doorClosed = m.doorClosed === true || m.doorClosed === 1 || m.door_closed === true || m.door_closed === 1;
-              var timeLeft = val(m, 'timeRemaining', 'time_remaining');
-              var reason = val(m, 'notAvailableReason', 'not_available_reason') || '—';
-              var settings = settingsStr(m);
-              var tr = document.createElement('tr');
-              tr.innerHTML =
-                '<td>' + type + '</td>' +
-                '<td>#' + sticker + '</td>' +
-                '<td class="' + (avail ? 'avail-yes">Yes' : 'avail-no">No') + '</td>' +
-                '<td>' + (inSvc ? 'Yes' : 'No') + '</td>' +
-                '<td>' + mode + '</td>' +
-                '<td>' + (doorClosed ? 'Yes' : 'No') + '</td>' +
-                '<td>' + (timeLeft !== '' ? timeLeft + ' min' : '—') + '</td>' +
-                '<td>' + reason + '</td>' +
-                '<td>' + settings + '</td>';
-              tbody.appendChild(tr);
+              try {
+                var type = safeStr(m.type || m.Type).toLowerCase() || '—';
+                var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '—');
+                var avail = m.available === true || m.available === 1 || m.available === 'true' || m.Available === true;
+                var inSvc = (m.inService !== undefined && m.inService !== null && m.inService !== false && m.inService !== '') || m.in_service === true || m.in_service === 1;
+                var mode = val(m, 'mode', 'Mode') || '—';
+                var doorClosed = m.doorClosed === true || m.doorClosed === 1 || m.door_closed === true || m.door_closed === 1;
+                var timeLeft = val(m, 'timeRemaining', 'time_remaining');
+                var reason = val(m, 'notAvailableReason', 'not_available_reason') || '—';
+                var settings = settingsStr(m);
+                var tr = document.createElement('tr');
+                function cell(txt, cls) { var td = document.createElement('td'); td.textContent = txt; if (cls) td.className = cls; return td; }
+                tr.appendChild(cell(type));
+                tr.appendChild(cell('#' + sticker));
+                tr.appendChild(cell(avail ? 'Yes' : 'No', avail ? 'avail-yes' : 'avail-no'));
+                tr.appendChild(cell(inSvc ? 'Yes' : 'No'));
+                tr.appendChild(cell(mode));
+                tr.appendChild(cell(doorClosed ? 'Yes' : 'No'));
+                tr.appendChild(cell(timeLeft !== '' ? timeLeft + ' min' : '—'));
+                tr.appendChild(cell(reason));
+                tr.appendChild(cell(settings));
+                tbody.appendChild(tr);
+              } catch (err) { console.warn('machine row', err); }
             });
+            if (tbody.children.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">No rows (check console)</td></tr>';
+            }
           }
 
           fetch(WORKER_URL + '?t=' + Date.now()).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
-            var list = null;
-            if (Array.isArray(liveMachines)) list = liveMachines;
-            else if (liveMachines && typeof liveMachines === 'object') {
-              if (Array.isArray(liveMachines.machines)) list = liveMachines.machines;
-              else if (Array.isArray(liveMachines.data)) list = liveMachines.data;
-              else if (Array.isArray(liveMachines.results)) list = liveMachines.results;
-              else {
-                var vals = Object.values(liveMachines);
-                for (var v = 0; v < vals.length; v++) {
-                  if (Array.isArray(vals[v]) && vals[v].length > 0 && typeof vals[v][0] === 'object') { list = vals[v]; break; }
+            try {
+              var list = null;
+              if (Array.isArray(liveMachines)) list = liveMachines;
+              else if (liveMachines && typeof liveMachines === 'object') {
+                if (Array.isArray(liveMachines.machines)) list = liveMachines.machines;
+                else if (Array.isArray(liveMachines.data)) list = liveMachines.data;
+                else if (Array.isArray(liveMachines.results)) list = liveMachines.results;
+                else {
+                  var vals = Object.values(liveMachines);
+                  for (var v = 0; v < vals.length; v++) {
+                    if (Array.isArray(vals[v]) && vals[v].length > 0 && typeof vals[v][0] === 'object') { list = vals[v]; break; }
+                  }
                 }
               }
+              var tbody = document.getElementById('machines-tbody');
+              if (!list || list.length === 0) {
+                if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">No machine array in response (got ' + (liveMachines ? typeof liveMachines : 'null') + ')</td></tr>';
+                return;
+              }
+              function typeIs(m, t) { var s = String(m && (m.type || m.Type) || '').toLowerCase(); return s === t; }
+              function isAvailable(m) { return m && (m.available === true || m.available === 1 || m.available === 'true' || m.Available === true); }
+              var washers = list.filter(function(m) { return m && typeIs(m, 'washer'); });
+              var dryers = list.filter(function(m) { return m && typeIs(m, 'dryer'); });
+              document.getElementById('live-badge').classList.add('visible');
+              document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
+              renderMachinesTable(list);
+              var wFree = washers.filter(isAvailable).length;
+              var dFree = dryers.filter(isAvailable).length;
+              document.getElementById('washers-free').textContent = wFree;
+              document.getElementById('washers-in-use').textContent = washers.length - wFree;
+              document.getElementById('dryers-free').textContent = dFree;
+              document.getElementById('dryers-in-use').textContent = dryers.length - dFree;
+              var wTot = washers.length || 1;
+              var dTot = dryers.length || 1;
+              wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
+              dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
+            } catch (err) {
+              console.error('Worker response handling', err);
+              var tbody = document.getElementById('machines-tbody');
+              if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="color: var(--amber);">Error: ' + (err.message || 'see console') + '</td></tr>';
             }
-            if (!list || list.length === 0) {
-              document.getElementById('machines-tbody').innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">Live data unavailable</td></tr>';
-              return;
-            }
-            function typeIs(m, t) { var s = String(m.type || m.Type || '').toLowerCase(); return s === t; }
-            function isAvailable(m) { return m.available === true || m.available === 1 || m.available === 'true' || m.Available === true; }
-            var washers = list.filter(function(m) { return typeIs(m, 'washer'); });
-            var dryers = list.filter(function(m) { return typeIs(m, 'dryer'); });
-            document.getElementById('live-badge').classList.add('visible');
-            document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
-            renderMachinesTable(list);
-            var wFree = washers.filter(function(m) { return isAvailable(m); }).length;
-            var dFree = dryers.filter(function(m) { return isAvailable(m); }).length;
-            document.getElementById('washers-free').textContent = wFree;
-            document.getElementById('washers-in-use').textContent = washers.length - wFree;
-            document.getElementById('dryers-free').textContent = dFree;
-            document.getElementById('dryers-in-use').textContent = dryers.length - dFree;
-            var wTot = washers.length || 1;
-            var dTot = dryers.length || 1;
-            wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
-            dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
-          }).catch(function() {
-            document.getElementById('machines-tbody').innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">Live data unavailable</td></tr>';
+          }).catch(function(err) {
+            console.error('Worker fetch failed', err);
+            var tbody = document.getElementById('machines-tbody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">Fetch failed (CORS or network). Check console.</td></tr>';
           });
 
           const history = summary.history || [];
