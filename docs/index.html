@@ -171,6 +171,13 @@
     .machine-list .machine-row .status.in-use { color: var(--red); }
     .machine-list .machine-row .status.available { color: var(--green); }
     .machine-list .machine-row .status.warn { color: var(--amber); }
+    .machines-table-wrap { margin-top: 1rem; overflow-x: auto; }
+    .machines-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    .machines-table th, .machines-table td { padding: 0.35rem 0.5rem; text-align: left; border: 1px solid var(--border); color: var(--text-dim); }
+    .machines-table th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .machines-table tr:nth-child(even) { background: rgba(0, 30, 0, 0.15); }
+    .machines-table .avail-yes { color: var(--green); }
+    .machines-table .avail-no { color: var(--red); }
   </style>
 </head>
 <body>
@@ -188,36 +195,24 @@
           <div class="label">Washers</div>
           <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
           <div class="status-pct" id="washers-pct"></div>
-          <div class="machine-list" id="washer-list">
-            <div class="list-title">By machine</div>
-            <div class="machine-row"><span class="mid">#1</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#2</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#3</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#4</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#5</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#6</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#7</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#8</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#9</span><span class="status">—</span></div>
-          </div>
         </div>
         <div class="machine-block" id="dryers-block">
           <div class="label">Dryers</div>
           <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
           <div class="status-pct" id="dryers-pct"></div>
-          <div class="machine-list" id="dryer-list">
-            <div class="list-title">By machine</div>
-            <div class="machine-row"><span class="mid">#1</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#2</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#3</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#4</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#5</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#6</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#7</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#8</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#9</span><span class="status">—</span></div>
-            <div class="machine-row"><span class="mid">#10</span><span class="status">—</span></div>
-          </div>
+        </div>
+        <div class="machines-table-wrap" id="machines-table-wrap">
+          <div class="list-title" style="margin-bottom:0.4rem;">All machines (live)</div>
+          <table class="machines-table" id="machines-table">
+            <thead>
+              <tr>
+                <th>Type</th><th>#</th><th>Available</th><th>In service</th><th>Mode</th><th>Door closed</th><th>Time left</th><th>Not available reason</th><th>Settings</th>
+              </tr>
+            </thead>
+            <tbody id="machines-tbody">
+              <tr><td colspan="9" style="color: var(--text-muted);">Loading live data…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -411,83 +406,55 @@
           wp.textContent = (cur.washer_utilization !== undefined && cur.washer_utilization !== null ? cur.washer_utilization + '% utilized' : '');
           dp.textContent = (cur.dryer_utilization !== undefined && cur.dryer_utilization !== null ? cur.dryer_utilization + '% utilized' : '');
 
-          function renderMachineLists(washers, dryers, pickupRates, isLive) {
-            var washerListEl = document.getElementById('washer-list');
-            var dryerListEl = document.getElementById('dryer-list');
-            washerListEl.innerHTML = '<div class="list-title">By machine</div>';
-            dryerListEl.innerHTML = '<div class="list-title">By machine</div>';
-            function bySticker(a, b) { return (Number(a.stickerNumber != null ? a.stickerNumber : a.sticker) || 0) - (Number(b.stickerNumber != null ? b.stickerNumber : b.sticker) || 0); }
-            if (washers && washers.length) washers.sort(bySticker);
-            if (dryers && dryers.length) dryers.sort(bySticker);
-            var rates = (pickupRates && pickupRates.washer_stranded_rate) || {};
-            var lax = getLaxTime();
-            var dayKey = String(lax.dayOfWeek);
-            var hourKey = String(lax.hour);
-            function avail(m) { return m.available === true || m.available === 1 || m.available === 'true' || m.Available === true; }
-            function doorClosed(m) { return m.doorClosed === true || m.doorClosed === 1 || m.door_closed === true || m.door_closed === 1; }
-            function mins(m) { return m.timeRemaining != null ? m.timeRemaining : (m.time_remaining != null ? m.time_remaining : 0); }
-            function sticker(m) { return m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '?'); }
-            (washers || []).forEach(function(m) {
-              var row = document.createElement('div');
-              row.className = 'machine-row';
-              var mid = document.createElement('span');
-              mid.className = 'mid';
-              mid.textContent = '#' + sticker(m);
-              row.appendChild(mid);
-              var status = document.createElement('span');
-              status.className = 'status';
-              if (!isLive) {
-                status.textContent = '\u2014';
-              } else if (avail(m)) {
-                status.classList.add('available');
-                var dc = doorClosed(m);
-                var rate = (rates[dayKey] && rates[dayKey][hourKey] != null) ? rates[dayKey][hourKey] : null;
-                if (dc && rate != null && rate > 0.5) {
-                  status.classList.add('warn');
-                  status.textContent = '\u2713 Available \u26A0\uFE0F Likely has laundry inside (lid closed, ' + Math.round(rate * 100) + '% at this hour)';
-                } else if (!dc) {
-                  status.textContent = '\u2713 Available \u2713 Probably empty (lid open)';
-                } else {
-                  status.textContent = '\u2713 Available';
-                }
-              } else {
-                status.classList.add('in-use');
-                var min = mins(m);
-                status.textContent = 'In use' + (min ? ' (' + min + ' min left)' : '');
-              }
-              row.appendChild(status);
-              washerListEl.appendChild(row);
-            });
-            (dryers || []).forEach(function(m) {
-              var row = document.createElement('div');
-              row.className = 'machine-row';
-              var mid = document.createElement('span');
-              mid.className = 'mid';
-              mid.textContent = '#' + sticker(m);
-              row.appendChild(mid);
-              var status = document.createElement('span');
-              status.className = 'status';
-              if (!isLive) {
-                status.textContent = '\u2014';
-              } else if (avail(m)) {
-                status.classList.add('available');
-                status.textContent = '\u2713 Available';
-              } else {
-                status.classList.add('in-use');
-                var min = mins(m);
-                status.textContent = 'In use' + (min ? ' (' + min + ' min left)' : '');
-              }
-              row.appendChild(status);
-              dryerListEl.appendChild(row);
+          function renderMachinesTable(list) {
+            var tbody = document.getElementById('machines-tbody');
+            if (!list || list.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">No live data</td></tr>';
+              return;
+            }
+            function byTypeThenSticker(a, b) {
+              var ta = String(a.type || a.Type || '').toLowerCase();
+              var tb = String(b.type || b.Type || '').toLowerCase();
+              if (ta !== tb) return ta > tb ? 1 : -1;
+              return (Number(a.stickerNumber != null ? a.stickerNumber : a.sticker) || 0) - (Number(b.stickerNumber != null ? b.stickerNumber : b.sticker) || 0);
+            }
+            var sorted = list.slice().sort(byTypeThenSticker);
+            function val(m, key, key2) { var v = m[key]; if (v === undefined && key2) v = m[key2]; return v === undefined || v === null ? '' : v; }
+            function settingsStr(m) {
+              var s = m.settings || m.Settings || {};
+              var parts = [];
+              if (s.cycle || s.Cycle) parts.push('cycle: ' + (s.cycle || s.Cycle));
+              if (s.soil || s.Soil) parts.push('soil: ' + (s.soil || s.Soil));
+              if (s.washerTemp || s.washer_temp) parts.push('washT: ' + (s.washerTemp || s.washer_temp));
+              if (s.dryerTemp || s.dryer_temp) parts.push('dryT: ' + (s.dryerTemp || s.dryer_temp));
+              if (m.display || m.Display) parts.push(m.display || m.Display);
+              return parts.length ? parts.join('; ') : '—';
+            }
+            tbody.innerHTML = '';
+            sorted.forEach(function(m) {
+              var type = String(m.type || m.Type || '').toLowerCase() || '—';
+              var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '—');
+              var avail = m.available === true || m.available === 1 || m.available === 'true' || m.Available === true;
+              var inSvc = m.inService !== undefined && m.inService !== null && m.inService !== false && m.inService !== '' || m.in_service === true || m.in_service === 1;
+              var mode = val(m, 'mode', 'Mode') || '—';
+              var doorClosed = m.doorClosed === true || m.doorClosed === 1 || m.door_closed === true || m.door_closed === 1;
+              var timeLeft = val(m, 'timeRemaining', 'time_remaining');
+              var reason = val(m, 'notAvailableReason', 'not_available_reason') || '—';
+              var settings = settingsStr(m);
+              var tr = document.createElement('tr');
+              tr.innerHTML =
+                '<td>' + type + '</td>' +
+                '<td>#' + sticker + '</td>' +
+                '<td class="' + (avail ? 'avail-yes">Yes' : 'avail-no">No') + '</td>' +
+                '<td>' + (inSvc ? 'Yes' : 'No') + '</td>' +
+                '<td>' + mode + '</td>' +
+                '<td>' + (doorClosed ? 'Yes' : 'No') + '</td>' +
+                '<td>' + (timeLeft !== '' ? timeLeft + ' min' : '—') + '</td>' +
+                '<td>' + reason + '</td>' +
+                '<td>' + settings + '</td>';
+              tbody.appendChild(tr);
             });
           }
-          var wTotal = cur.washers_total || 9;
-          var dTotal = cur.dryers_total || 10;
-          var placeholderWashers = [];
-          var placeholderDryers = [];
-          for (var wi = 1; wi <= wTotal; wi++) placeholderWashers.push({ stickerNumber: wi, sticker: wi, available: true });
-          for (var di = 1; di <= dTotal; di++) placeholderDryers.push({ stickerNumber: di, sticker: di, available: true });
-          renderMachineLists(placeholderWashers, placeholderDryers, pickupRates, false);
 
           fetch(WORKER_URL + '?t=' + Date.now()).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
             var list = null;
@@ -503,15 +470,17 @@
                 }
               }
             }
-            if (!list || list.length === 0) return;
+            if (!list || list.length === 0) {
+              document.getElementById('machines-tbody').innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">Live data unavailable</td></tr>';
+              return;
+            }
             function typeIs(m, t) { var s = String(m.type || m.Type || '').toLowerCase(); return s === t; }
             function isAvailable(m) { return m.available === true || m.available === 1 || m.available === 'true' || m.Available === true; }
             var washers = list.filter(function(m) { return typeIs(m, 'washer'); });
             var dryers = list.filter(function(m) { return typeIs(m, 'dryer'); });
-            if (washers.length === 0 && dryers.length === 0) return;
             document.getElementById('live-badge').classList.add('visible');
             document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
-            try { renderMachineLists(washers, dryers, pickupRates, true); } catch (e) { console.warn('renderMachineLists', e); }
+            renderMachinesTable(list);
             var wFree = washers.filter(function(m) { return isAvailable(m); }).length;
             var dFree = dryers.filter(function(m) { return isAvailable(m); }).length;
             document.getElementById('washers-free').textContent = wFree;
@@ -522,7 +491,9 @@
             var dTot = dryers.length || 1;
             wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
             dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
-          }).catch(function() {});
+          }).catch(function() {
+            document.getElementById('machines-tbody').innerHTML = '<tr><td colspan="9" style="color: var(--text-muted);">Live data unavailable</td></tr>';
+          });
 
           const history = summary.history || [];
           const hourData = avgUtilByHour(history);
