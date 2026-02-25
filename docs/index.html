@@ -489,17 +489,29 @@
           for (var di = 1; di <= dTotal; di++) placeholderDryers.push({ stickerNumber: di, sticker: di, available: true });
           renderMachineLists(placeholderWashers, placeholderDryers, pickupRates, false);
 
-          fetch(WORKER_URL).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
+          fetch(WORKER_URL + '?t=' + Date.now()).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
             var list = null;
             if (Array.isArray(liveMachines)) list = liveMachines;
-            else if (liveMachines && Array.isArray(liveMachines.machines)) list = liveMachines.machines;
-            else if (liveMachines && Array.isArray(liveMachines.data)) list = liveMachines.data;
-            else if (liveMachines && Array.isArray(liveMachines.results)) list = liveMachines.results;
+            else if (liveMachines && typeof liveMachines === 'object') {
+              if (Array.isArray(liveMachines.machines)) list = liveMachines.machines;
+              else if (Array.isArray(liveMachines.data)) list = liveMachines.data;
+              else if (Array.isArray(liveMachines.results)) list = liveMachines.results;
+              else {
+                var vals = Object.values(liveMachines);
+                for (var v = 0; v < vals.length; v++) {
+                  if (Array.isArray(vals[v]) && vals[v].length > 0 && typeof vals[v][0] === 'object') { list = vals[v]; break; }
+                }
+              }
+            }
             if (!list || list.length === 0) return;
-            function typeIs(m, t) { var s = (m.type || m.Type || '').toLowerCase(); return s === t; }
+            function typeIs(m, t) { var s = String(m.type || m.Type || '').toLowerCase(); return s === t; }
             function isAvailable(m) { return m.available === true || m.available === 1 || m.available === 'true' || m.Available === true; }
             var washers = list.filter(function(m) { return typeIs(m, 'washer'); });
             var dryers = list.filter(function(m) { return typeIs(m, 'dryer'); });
+            if (washers.length === 0 && dryers.length === 0) return;
+            document.getElementById('live-badge').classList.add('visible');
+            document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
+            try { renderMachineLists(washers, dryers, pickupRates, true); } catch (e) { console.warn('renderMachineLists', e); }
             var wFree = washers.filter(function(m) { return isAvailable(m); }).length;
             var dFree = dryers.filter(function(m) { return isAvailable(m); }).length;
             document.getElementById('washers-free').textContent = wFree;
@@ -510,9 +522,6 @@
             var dTot = dryers.length || 1;
             wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
             dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
-            document.getElementById('live-badge').classList.add('visible');
-            document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
-            try { renderMachineLists(washers, dryers, pickupRates, true); } catch (e) { console.warn('renderMachineLists', e); }
           }).catch(function() {});
 
           const history = summary.history || [];
