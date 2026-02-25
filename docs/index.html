@@ -163,11 +163,11 @@
     .washer-pickup-hints div { margin-top: 0.25rem; }
     .washer-pickup-hints .warn { color: var(--amber); }
     .washer-pickup-hints .ok { color: var(--green); }
-    .machine-list { margin-top: 0.75rem; font-size: 0.8rem; }
-    .machine-list .list-title { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.35rem; }
-    .machine-list .machine-row { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.2rem; color: var(--text-dim); }
-    .machine-list .machine-row .mid { font-weight: 500; color: var(--text); min-width: 6ch; }
-    .machine-list .machine-row .status { flex: 1; }
+    .machine-list { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+    .machine-list .list-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); margin-bottom: 0.4rem; font-weight: 600; }
+    .machine-list .machine-row { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.25rem; color: var(--text); line-height: 1.4; }
+    .machine-list .machine-row .mid { font-weight: 600; color: var(--green); min-width: 5ch; }
+    .machine-list .machine-row .status { flex: 1; color: var(--text-dim); }
     .machine-list .machine-row .status.in-use { color: var(--red); }
     .machine-list .machine-row .status.available { color: var(--green); }
     .machine-list .machine-row .status.warn { color: var(--amber); }
@@ -188,13 +188,36 @@
           <div class="label">Washers</div>
           <div class="counts"><span class="free" id="washers-free">0</span> free / <span class="in-use" id="washers-in-use">0</span> in use</div>
           <div class="status-pct" id="washers-pct"></div>
-          <div class="machine-list" id="washer-list"></div>
+          <div class="machine-list" id="washer-list">
+            <div class="list-title">By machine</div>
+            <div class="machine-row"><span class="mid">#1</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#2</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#3</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#4</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#5</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#6</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#7</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#8</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#9</span><span class="status">—</span></div>
+          </div>
         </div>
         <div class="machine-block" id="dryers-block">
           <div class="label">Dryers</div>
           <div class="counts"><span class="free" id="dryers-free">0</span> free / <span class="in-use" id="dryers-in-use">0</span> in use</div>
           <div class="status-pct" id="dryers-pct"></div>
-          <div class="machine-list" id="dryer-list"></div>
+          <div class="machine-list" id="dryer-list">
+            <div class="list-title">By machine</div>
+            <div class="machine-row"><span class="mid">#1</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#2</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#3</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#4</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#5</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#6</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#7</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#8</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#9</span><span class="status">—</span></div>
+            <div class="machine-row"><span class="mid">#10</span><span class="status">—</span></div>
+          </div>
         </div>
       </div>
 
@@ -388,33 +411,20 @@
           wp.textContent = (cur.washer_utilization !== undefined && cur.washer_utilization !== null ? cur.washer_utilization + '% utilized' : '');
           dp.textContent = (cur.dryer_utilization !== undefined && cur.dryer_utilization !== null ? cur.dryer_utilization + '% utilized' : '');
 
-          fetch(WORKER_URL).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
-            if (!liveMachines || !Array.isArray(liveMachines)) return;
-            var washers = liveMachines.filter(function(m) { return m.type === 'washer'; });
-            var dryers = liveMachines.filter(function(m) { return m.type === 'dryer'; });
-            function bySticker(a, b) { return (Number(a.stickerNumber || a.sticker) || 0) - (Number(b.stickerNumber || b.sticker) || 0); }
-            washers.sort(bySticker);
-            dryers.sort(bySticker);
-            var wFree = washers.filter(function(m) { return m.available; }).length;
-            var dFree = dryers.filter(function(m) { return m.available; }).length;
-            document.getElementById('washers-free').textContent = wFree;
-            document.getElementById('washers-in-use').textContent = washers.length - wFree;
-            document.getElementById('dryers-free').textContent = dFree;
-            document.getElementById('dryers-in-use').textContent = dryers.length - dFree;
-            var wTot = washers.length || 1;
-            var dTot = dryers.length || 1;
-            wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
-            dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
-            document.getElementById('live-badge').classList.add('visible');
-            document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
+          function renderMachineLists(washers, dryers, pickupRates, isLive) {
+            var washerListEl = document.getElementById('washer-list');
+            var dryerListEl = document.getElementById('dryer-list');
+            washerListEl.innerHTML = '<div class="list-title">By machine</div>';
+            dryerListEl.innerHTML = '<div class="list-title">By machine</div>';
+            function bySticker(a, b) { return (Number(a.stickerNumber != null ? a.stickerNumber : a.sticker) || 0) - (Number(b.stickerNumber != null ? b.stickerNumber : b.sticker) || 0); }
+            if (washers && washers.length) washers.sort(bySticker);
+            if (dryers && dryers.length) dryers.sort(bySticker);
             var rates = (pickupRates && pickupRates.washer_stranded_rate) || {};
             var lax = getLaxTime();
             var dayKey = String(lax.dayOfWeek);
             var hourKey = String(lax.hour);
-            var washerListEl = document.getElementById('washer-list');
-            washerListEl.innerHTML = '<div class="list-title">By machine</div>';
-            washers.forEach(function(m) {
-              var sticker = m.stickerNumber || m.sticker || '?';
+            (washers || []).forEach(function(m) {
+              var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '?');
               var row = document.createElement('div');
               row.className = 'machine-row';
               var mid = document.createElement('span');
@@ -423,7 +433,9 @@
               row.appendChild(mid);
               var status = document.createElement('span');
               status.className = 'status';
-              if (m.available) {
+              if (!isLive) {
+                status.textContent = '\u2014';
+              } else if (m.available) {
                 status.classList.add('available');
                 var doorClosed = m.doorClosed === true || m.door_closed === true;
                 var rate = rates[dayKey] && rates[dayKey][hourKey] != null ? rates[dayKey][hourKey] : null;
@@ -443,10 +455,8 @@
               row.appendChild(status);
               washerListEl.appendChild(row);
             });
-            var dryerListEl = document.getElementById('dryer-list');
-            dryerListEl.innerHTML = '<div class="list-title">By machine</div>';
-            dryers.forEach(function(m) {
-              var sticker = m.stickerNumber || m.sticker || '?';
+            (dryers || []).forEach(function(m) {
+              var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '?');
               var row = document.createElement('div');
               row.className = 'machine-row';
               var mid = document.createElement('span');
@@ -455,7 +465,9 @@
               row.appendChild(mid);
               var status = document.createElement('span');
               status.className = 'status';
-              if (m.available) {
+              if (!isLive) {
+                status.textContent = '\u2014';
+              } else if (m.available) {
                 status.classList.add('available');
                 status.textContent = '\u2713 Available';
               } else {
@@ -466,6 +478,33 @@
               row.appendChild(status);
               dryerListEl.appendChild(row);
             });
+          }
+          var wTotal = cur.washers_total || 9;
+          var dTotal = cur.dryers_total || 10;
+          var placeholderWashers = [];
+          var placeholderDryers = [];
+          for (var wi = 1; wi <= wTotal; wi++) placeholderWashers.push({ stickerNumber: wi, sticker: wi, available: true });
+          for (var di = 1; di <= dTotal; di++) placeholderDryers.push({ stickerNumber: di, sticker: di, available: true });
+          renderMachineLists(placeholderWashers, placeholderDryers, pickupRates, false);
+
+          fetch(WORKER_URL).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
+            var list = Array.isArray(liveMachines) ? liveMachines : (liveMachines && Array.isArray(liveMachines.machines) ? liveMachines.machines : null);
+            if (!list || list.length === 0) return;
+            var washers = list.filter(function(m) { return m.type === 'washer'; });
+            var dryers = list.filter(function(m) { return m.type === 'dryer'; });
+            var wFree = washers.filter(function(m) { return m.available; }).length;
+            var dFree = dryers.filter(function(m) { return m.available; }).length;
+            document.getElementById('washers-free').textContent = wFree;
+            document.getElementById('washers-in-use').textContent = washers.length - wFree;
+            document.getElementById('dryers-free').textContent = dFree;
+            document.getElementById('dryers-in-use').textContent = dryers.length - dFree;
+            var wTot = washers.length || 1;
+            var dTot = dryers.length || 1;
+            wp.textContent = Math.round((washers.length - wFree) / wTot * 1000) / 10 + '% utilized';
+            dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
+            document.getElementById('live-badge').classList.add('visible');
+            document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
+            renderMachineLists(washers, dryers, pickupRates, true);
           }).catch(function() {});
 
           const history = summary.history || [];
