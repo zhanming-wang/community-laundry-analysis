@@ -423,56 +423,58 @@
             var lax = getLaxTime();
             var dayKey = String(lax.dayOfWeek);
             var hourKey = String(lax.hour);
+            function avail(m) { return m.available === true || m.available === 1 || m.available === 'true' || m.Available === true; }
+            function doorClosed(m) { return m.doorClosed === true || m.doorClosed === 1 || m.door_closed === true || m.door_closed === 1; }
+            function mins(m) { return m.timeRemaining != null ? m.timeRemaining : (m.time_remaining != null ? m.time_remaining : 0); }
+            function sticker(m) { return m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '?'); }
             (washers || []).forEach(function(m) {
-              var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '?');
               var row = document.createElement('div');
               row.className = 'machine-row';
               var mid = document.createElement('span');
               mid.className = 'mid';
-              mid.textContent = '#' + sticker;
+              mid.textContent = '#' + sticker(m);
               row.appendChild(mid);
               var status = document.createElement('span');
               status.className = 'status';
               if (!isLive) {
                 status.textContent = '\u2014';
-              } else if (m.available) {
+              } else if (avail(m)) {
                 status.classList.add('available');
-                var doorClosed = m.doorClosed === true || m.door_closed === true;
-                var rate = rates[dayKey] && rates[dayKey][hourKey] != null ? rates[dayKey][hourKey] : null;
-                if (doorClosed && rate != null && rate > 0.5) {
+                var dc = doorClosed(m);
+                var rate = (rates[dayKey] && rates[dayKey][hourKey] != null) ? rates[dayKey][hourKey] : null;
+                if (dc && rate != null && rate > 0.5) {
                   status.classList.add('warn');
                   status.textContent = '\u2713 Available \u26A0\uFE0F Likely has laundry inside (lid closed, ' + Math.round(rate * 100) + '% at this hour)';
-                } else if (!doorClosed) {
+                } else if (!dc) {
                   status.textContent = '\u2713 Available \u2713 Probably empty (lid open)';
                 } else {
                   status.textContent = '\u2713 Available';
                 }
               } else {
                 status.classList.add('in-use');
-                var min = m.timeRemaining != null ? m.timeRemaining : (m.time_remaining != null ? m.time_remaining : 0);
+                var min = mins(m);
                 status.textContent = 'In use' + (min ? ' (' + min + ' min left)' : '');
               }
               row.appendChild(status);
               washerListEl.appendChild(row);
             });
             (dryers || []).forEach(function(m) {
-              var sticker = m.stickerNumber != null ? m.stickerNumber : (m.sticker != null ? m.sticker : '?');
               var row = document.createElement('div');
               row.className = 'machine-row';
               var mid = document.createElement('span');
               mid.className = 'mid';
-              mid.textContent = '#' + sticker;
+              mid.textContent = '#' + sticker(m);
               row.appendChild(mid);
               var status = document.createElement('span');
               status.className = 'status';
               if (!isLive) {
                 status.textContent = '\u2014';
-              } else if (m.available) {
+              } else if (avail(m)) {
                 status.classList.add('available');
                 status.textContent = '\u2713 Available';
               } else {
                 status.classList.add('in-use');
-                var min = m.timeRemaining != null ? m.timeRemaining : (m.time_remaining != null ? m.time_remaining : 0);
+                var min = mins(m);
                 status.textContent = 'In use' + (min ? ' (' + min + ' min left)' : '');
               }
               row.appendChild(status);
@@ -488,12 +490,18 @@
           renderMachineLists(placeholderWashers, placeholderDryers, pickupRates, false);
 
           fetch(WORKER_URL).then(function(r) { return r.ok ? r.json() : null; }).then(function(liveMachines) {
-            var list = Array.isArray(liveMachines) ? liveMachines : (liveMachines && Array.isArray(liveMachines.machines) ? liveMachines.machines : null);
+            var list = null;
+            if (Array.isArray(liveMachines)) list = liveMachines;
+            else if (liveMachines && Array.isArray(liveMachines.machines)) list = liveMachines.machines;
+            else if (liveMachines && Array.isArray(liveMachines.data)) list = liveMachines.data;
+            else if (liveMachines && Array.isArray(liveMachines.results)) list = liveMachines.results;
             if (!list || list.length === 0) return;
-            var washers = list.filter(function(m) { return m.type === 'washer'; });
-            var dryers = list.filter(function(m) { return m.type === 'dryer'; });
-            var wFree = washers.filter(function(m) { return m.available; }).length;
-            var dFree = dryers.filter(function(m) { return m.available; }).length;
+            function typeIs(m, t) { var s = (m.type || m.Type || '').toLowerCase(); return s === t; }
+            function isAvailable(m) { return m.available === true || m.available === 1 || m.available === 'true' || m.Available === true; }
+            var washers = list.filter(function(m) { return typeIs(m, 'washer'); });
+            var dryers = list.filter(function(m) { return typeIs(m, 'dryer'); });
+            var wFree = washers.filter(function(m) { return isAvailable(m); }).length;
+            var dFree = dryers.filter(function(m) { return isAvailable(m); }).length;
             document.getElementById('washers-free').textContent = wFree;
             document.getElementById('washers-in-use').textContent = washers.length - wFree;
             document.getElementById('dryers-free').textContent = dFree;
@@ -504,7 +512,7 @@
             dp.textContent = Math.round((dryers.length - dFree) / dTot * 1000) / 10 + '% utilized';
             document.getElementById('live-badge').classList.add('visible');
             document.getElementById('status-refreshed').classList.add('visible').textContent = 'last refreshed: just now';
-            renderMachineLists(washers, dryers, pickupRates, true);
+            try { renderMachineLists(washers, dryers, pickupRates, true); } catch (e) { console.warn('renderMachineLists', e); }
           }).catch(function() {});
 
           const history = summary.history || [];
