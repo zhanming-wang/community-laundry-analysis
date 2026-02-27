@@ -2,7 +2,9 @@ name: Laundry Poller
 
 on:
   schedule:
-    - cron: '0,30 * * * *'   # every 30 min, 24/7
+    # Every 30 min on the dot; offset run catches hours when GitHub skips top-of-hour (e.g. 4pm/5pm/7pm PST).
+    - cron: '0,30 * * * *'
+    - cron: '7,37 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -29,8 +31,24 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run poller
-        run: python poll.py
+      - name: Run poller (retry with exponential backoff)
+        run: |
+          max_attempts=4
+          attempt=1
+          while true; do
+            if python poll.py; then
+              echo "Poll succeeded on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "Poll failed after $max_attempts attempts"
+              exit 1
+            fi
+            wait_sec=$(( 2 ** attempt ))
+            echo "Attempt $attempt failed; waiting ${wait_sec}s before retry..."
+            sleep "$wait_sec"
+            attempt=$(( attempt + 1 ))
+          done
 
       - name: Commit data and dashboard
         run: |
