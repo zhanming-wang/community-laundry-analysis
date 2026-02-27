@@ -567,7 +567,12 @@
             container.innerHTML = '<div class="machine-card machine-card-accumulating">\u21BB ' + (alerts.message || 'Building anomaly model...') + '</div>';
             return;
           }
-          var machines = alerts.machines || [];
+          var machines = (alerts.machines || []).slice().sort(function(a, b) {
+            var ta = (a.machine_type || '').toLowerCase().indexOf('washer') !== -1 ? 0 : 1;
+            var tb = (b.machine_type || '').toLowerCase().indexOf('washer') !== -1 ? 0 : 1;
+            if (ta !== tb) return ta - tb;
+            return (a.sticker || 0) - (b.sticker || 0);
+          });
           var flagged = machines.filter(function(m) { return m.status === 'offline' || m.status === 'critical' || m.status === 'warning'; });
           subtitle.textContent = flagged.length === 0 ? 'All ' + machines.length + ' machines operating normally' : '\u26A0\uFE0F ' + flagged.length + ' machine(s) need attention';
           container.innerHTML = '';
