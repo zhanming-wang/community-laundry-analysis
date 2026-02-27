@@ -73,13 +73,34 @@ def explain(row):
         return "Running with door open — unusual state."
     return f"Unusual combination of states (score: {score:.2f}). Worth a visual check."
 
+def read_machines_csv(path):
+    """Read machines_log.csv; tolerate 26-col header with some 27-col rows (poll_type added mid-run)."""
+    import csv
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header) + 1 and len(header) == 26:
+                row = row[:4] + row[5:]  # drop extra 5th column (poll_type)
+            if len(row) == len(header):
+                rows.append(row)
+    df = pd.DataFrame(rows, columns=header)
+    # Coerce numeric columns (all come in as str from csv.reader)
+    for col in ("hour_pst", "minute", "day_of_week", "sticker", "available", "time_remaining",
+                "door_closed", "in_service", "free_play", "can_add_time", "show_settings"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+    return df
+
+
 def main():
     if not os.path.isfile(MACHINES_FILE):
         print("No machines_log.csv found — skipping.")
         write_empty_alerts("No machine data collected yet.")
         return
 
-    df = pd.read_csv(MACHINES_FILE)
+    df = read_machines_csv(MACHINES_FILE)
     if "poll_type" in df.columns:
         df = df[df["poll_type"].fillna("scheduled") == "scheduled"]
     total_rows = len(df)
