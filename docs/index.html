@@ -468,12 +468,12 @@
         }
       };
 
-      var base = 'https://zhanming-wang.github.io/community-laundry-analysis';
+      var base = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://zhanming-wang.github.io/community-laundry-analysis';
       var WORKER_URL = 'https://laundry.zhanming-wang.workers.dev/machines';
       Promise.all([
-        fetch(base + '/summary.json').then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('Failed to load summary')); }),
-        fetch(base + '/alerts.json').then(function(r) { return r.ok ? r.json() : { model_status: 'accumulating', message: 'Building anomaly model...', machines: [] }; }).catch(function() { return { model_status: 'accumulating', message: 'Loading...', machines: [] }; }),
-        fetch(base + '/pickup_rates.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+        fetch((base || '.') + '/summary.json').then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('Failed to load summary')); }),
+        fetch((base || '.') + '/alerts.json').then(function(r) { return r.ok ? r.json() : { model_status: 'accumulating', message: 'Building anomaly model...', machines: [] }; }).catch(function() { return { model_status: 'accumulating', message: 'Loading...', machines: [] }; }),
+        fetch((base || '.') + '/pickup_rates.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
       ]).then(function(arr) {
         var summary = arr[0];
         var alerts = arr[1];
