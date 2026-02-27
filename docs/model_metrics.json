@@ -1,8 +1,8 @@
 {
-  "trained_at": "2026-02-26 18:58:42",
+  "trained_at": "2026-02-27 01:31:13",
   "total_rows": 1273,
-  "n_anomaly_labels": 135,
-  "n_normal_labels": 1138,
+  "n_anomaly_labels": 133,
+  "n_normal_labels": 1140,
   "precision_target": "high_precision_low_fp",
   "class_weight": "0:1, 1:5",
   "watch_threshold": 0.5,
@@ -13,6 +13,7 @@
     "available",
     "mode_encoded",
     "time_remaining",
+    "is_active_cycle",
     "door_closed",
     "in_service",
     "has_unavail_reason",
@@ -26,8 +27,8 @@
     "hour_pst",
     "day_of_week"
   ],
-  "cv_precision_macro": 0.99,
-  "cv_recall_macro": 0.999,
-  "cv_f1_macro": 0.994,
-  "cv_average_precision": 1.0
+  "cv_precision_macro": 0.983,
+  "cv_recall_macro": 0.998,
+  "cv_f1_macro": 0.99,
+  "cv_average_precision": 0.999
 }
