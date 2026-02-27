@@ -13,6 +13,7 @@ SUMMARY_FILE  = "docs/summary.json"
 MACHINES_FILE = "data/machines_log.csv"
 MANIFEST_FILE = "data/machine_manifest.json"
 MANIFEST_MIN_POLLS = 50
+MANIFEST_APPEARANCE_THRESHOLD = 0.70  # 70%: includes machines absent up to 30% of polls (e.g. Washer #8)
 
 
 def load_manifest():
@@ -56,7 +57,7 @@ def update_manifest(machines):
             if not oid or oid in manifest:
                 continue
             appearance_rate = counts[oid]["seen"] / total_polls
-            if appearance_rate >= 0.80:
+            if appearance_rate >= MANIFEST_APPEARANCE_THRESHOLD:
                 manifest[oid] = {
                     "sticker":         m.get("stickerNumber", ""),
                     "machine_type":    m.get("type", ""),
