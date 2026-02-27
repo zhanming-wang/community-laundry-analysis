@@ -11,11 +11,18 @@ from sklearn.metrics import classification_report
 
 LAX = ZoneInfo("America/Los_Angeles")
 
-MACHINES_FILE = "data/machines_log.csv"
-MODEL_FILE    = "models/random_forest.pkl"
-ALERTS_FILE   = "docs/alerts.json"
-PICKUP_FILE   = "docs/pickup_rates.json"
-MIN_ROWS      = 500  # ~3-4 days of data before training is meaningful
+MACHINES_FILE  = "data/machines_log.csv"
+MODEL_FILE     = "models/random_forest.pkl"
+ALERTS_FILE    = "docs/alerts.json"
+PICKUP_FILE    = "docs/pickup_rates.json"
+METRICS_FILE   = "docs/model_metrics.json"
+MIN_ROWS       = 500  # ~3-4 days of data before training is meaningful
+
+# Precision-tuned thresholds (see docs/model_metrics.json for audit trail)
+WATCH_THRESHOLD    = 0.50
+WARNING_THRESHOLD  = 0.70
+CRITICAL_THRESHOLD = 0.85
+CONFIRMATION_POLLS = 2  # warning/critical require this many consecutive polls above WARNING_THRESHOLD
 
 MODE_MAP       = {"idle": 0, "running": 1, "pressStart": 2, "paused": 3, "offline": 4}
 CONTROLLER_MAP = {"ACA": 0, "QPRO": 1}
@@ -63,6 +70,8 @@ def engineer_features(df):
 # ✅ Behavioral signals, encoded categories, engineered temporal features
 # ❌ Excluded: opaque_id, sticker, license_plate, nfc_id, qr_code_id, timestamp,
 #    display, group_id, soil, cycle, washer_temp, dryer_temp, show_settings, minute, poll_type
+# ❌ can_add_time removed: hardware constant per machine type — 12.35% importance was
+#    machine-identity leak, not a behavioral signal
 FEATURE_COLS = [
     "available",
     "mode_encoded",
@@ -70,7 +79,6 @@ FEATURE_COLS = [
     "door_closed",
     "in_service",
     "has_unavail_reason",
-    "can_add_time",
     "free_play",
     "consecutive_same_mode",
     "hours_in_current_mode",
@@ -200,50 +208,78 @@ def main():
         write_empty_alerts("Collecting anomaly labels — need more offline/stuck events.")
         return
 
+    # class_weight={0:1, 1:5}: manual balance trades some recall for much higher precision
+    # vs "balanced" (~27x upweight) which caused false positives on ghost-running washers
     model = RandomForestClassifier(
         n_estimators=200,
         max_depth=8,
         min_samples_leaf=5,
-        class_weight="balanced",
+        class_weight={0: 1, 1: 5},
         random_state=42,
         n_jobs=-1,
     )
 
+    cv_metrics = {}
     if n_anomaly >= 10:
         cv = StratifiedKFold(n_splits=min(5, n_anomaly), shuffle=True, random_state=42)
         cv_results = cross_validate(
             model, X, y, cv=cv,
-            scoring=["precision_macro", "recall_macro", "f1_macro"],
+            scoring=["precision_macro", "recall_macro", "f1_macro", "average_precision"],
             error_score="raise"
         )
-        print(f"CV Precision: {cv_results['test_precision_macro'].mean():.2f} "
-              f"Recall: {cv_results['test_recall_macro'].mean():.2f} "
-              f"F1: {cv_results['test_f1_macro'].mean():.2f}")
+        cv_metrics = {
+            "cv_precision_macro":    round(float(cv_results["test_precision_macro"].mean()), 3),
+            "cv_recall_macro":       round(float(cv_results["test_recall_macro"].mean()), 3),
+            "cv_f1_macro":           round(float(cv_results["test_f1_macro"].mean()), 3),
+            "cv_average_precision":  round(float(cv_results["test_average_precision"].mean()), 3),
+        }
+        print(f"CV Precision: {cv_metrics['cv_precision_macro']:.2f}  "
+              f"Recall: {cv_metrics['cv_recall_macro']:.2f}  "
+              f"F1: {cv_metrics['cv_f1_macro']:.2f}  "
+              f"AvgPrec: {cv_metrics['cv_average_precision']:.2f}")
 
     model.fit(X, y)
     df["anomaly_score"] = model.predict_proba(X)[:, 1]
 
-    latest = (
-        df.sort_values("timestamp")
-        .groupby("opaque_id")
-        .last()
-        .reset_index()
+    df_sorted = df.sort_values("timestamp")
+    latest = df_sorted.groupby("opaque_id").last().reset_index()
+
+    # Second-to-last row per machine for consecutive-poll confirmation gate (RC4)
+    def nth_last(g, n):
+        return g.iloc[-n] if len(g) >= n else g.iloc[0]
+
+    second_latest = (
+        df_sorted.groupby("opaque_id")
+        .apply(lambda g: nth_last(g, 2))
+        .reset_index(drop=True)
     )
+    second_latest["anomaly_score"] = model.predict_proba(
+        second_latest[FEATURE_COLS].fillna(0)
+    )[:, 1]
+    prev_score_by_id = dict(zip(second_latest["opaque_id"], second_latest["anomaly_score"]))
 
     machines_out = []
     for _, row in latest.iterrows():
         score = float(row["anomaly_score"])
+        oid   = str(row["opaque_id"])
 
         if row.get("was_missing", 0) == 1:
             status = "offline"
-        elif score >= 0.70:
-            status = "critical"
-        elif score >= 0.45:
-            status = "warning"
-        elif score >= 0.25:
-            status = "watch"
         else:
-            status = "normal"
+            # Consecutive-poll confirmation: warning/critical require previous poll
+            # also above WARNING_THRESHOLD to prevent single-poll noise spikes
+            prev_score  = float(prev_score_by_id.get(oid, 0.0))
+            confirmed   = prev_score >= WARNING_THRESHOLD
+
+            if score >= CRITICAL_THRESHOLD and confirmed:
+                status = "critical"
+            elif score >= WARNING_THRESHOLD and confirmed:
+                status = "warning"
+            elif score >= WATCH_THRESHOLD:
+                # watch needs no confirmation — single poll is enough for a soft signal
+                status = "watch"
+            else:
+                status = "normal"
 
         machines_out.append({
             "sticker":               int(row["sticker"]),
@@ -265,8 +301,10 @@ def main():
     order = {"offline": 0, "critical": 1, "warning": 2, "watch": 3, "normal": 4}
     machines_out.sort(key=lambda x: (order[x["status"]], x["sticker"]))
 
+    trained_at = datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S")
+
     alerts = {
-        "trained_at":         datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S"),
+        "trained_at":         trained_at,
         "total_rows":         total_rows,
         "model_status":       "ok",
         "model_type":         "RandomForestClassifier",
@@ -277,9 +315,26 @@ def main():
         "machines":           machines_out,
     }
 
+    metrics = {
+        "trained_at":                   trained_at,
+        "total_rows":                   total_rows,
+        "n_anomaly_labels":             n_anomaly,
+        "n_normal_labels":              n_normal,
+        "precision_target":             "high_precision_low_fp",
+        "class_weight":                 "0:1, 1:5",
+        "watch_threshold":              WATCH_THRESHOLD,
+        "warning_threshold":            WARNING_THRESHOLD,
+        "critical_threshold":           CRITICAL_THRESHOLD,
+        "confirmation_required_polls":  CONFIRMATION_POLLS,
+        "feature_cols":                 FEATURE_COLS,
+        **cv_metrics,
+    }
+
     os.makedirs("docs", exist_ok=True)
     with open(ALERTS_FILE, "w") as f:
         json.dump(alerts, f, indent=2)
+    with open(METRICS_FILE, "w") as f:
+        json.dump(metrics, f, indent=2)
 
     os.makedirs("models", exist_ok=True)
     with open(MODEL_FILE, "wb") as f:
