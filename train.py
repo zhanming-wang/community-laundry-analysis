@@ -64,6 +64,14 @@ def engineer_features(df):
     df["type_encoded"]       = df["machine_type"].map(TYPE_MAP).fillna(-1).astype(int)
     df["has_unavail_reason"] = (df["not_available_reason"].fillna("").str.len() > 0).astype(int)
 
+    # Is the machine actively cycling? Running with timer > 0 means the cycle is progressing
+    # normally — the timer is counting down. This is the clearest signal that a running machine
+    # is NOT stuck.
+    df["is_active_cycle"] = (
+        (df["mode"] == "running") &
+        (df["time_remaining"].astype(float) > 0)
+    ).astype(int)
+
     return df
 
 
@@ -76,6 +84,7 @@ FEATURE_COLS = [
     "available",
     "mode_encoded",
     "time_remaining",
+    "is_active_cycle",      # 1 if running with timer > 0 (cycle is progressing, not stuck)
     "door_closed",
     "in_service",
     "has_unavail_reason",
@@ -98,7 +107,7 @@ def generate_labels(df):
 
     Priority order (higher wins):
       1. was_missing         — absent from API (highest confidence)
-      2. stuck running       — running > 2h (normal max ~1h)
+      2. stuck running       — running > 2h AND timer = 0 (timer>0 means cycle still progressing)
       3. pressStart stuck    — waiting > 1.5h (interrupted cycle)
       4. running, timer = 0  — sensor may be stuck
     """
@@ -109,7 +118,8 @@ def generate_labels(df):
 
     stuck_running = (
         (df["mode"] == "running") &
-        (df["hours_in_current_mode"] >= 2.0)
+        (df["hours_in_current_mode"] >= 2.0) &
+        (df["time_remaining"].astype(float) == 0)  # timer must be 0 — if timer>0 the cycle is still progressing
     )
     labels[stuck_running] = 1
 
@@ -260,6 +270,10 @@ def main():
 
         if row.get("was_missing", 0) == 1:
             status = "offline"
+        elif str(row["mode"]) == "running" and int(row.get("time_remaining", 0)) > 0:
+            # Machine has an active cycle with time remaining — the timer is counting down,
+            # so it is definitively NOT stuck. Hard-bypass ML to prevent false positives.
+            status = "normal"
         else:
             # Consecutive-poll confirmation: warning/critical require previous poll
             # also above WARNING_THRESHOLD to prevent single-poll noise spikes
