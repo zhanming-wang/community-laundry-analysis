@@ -559,7 +559,8 @@
             normal:   { dot: '#22c55e', border: '#166534', bg: '#0f172a' },
             watch:    { dot: '#eab308', border: '#854d0e', bg: '#0f172a' },
             warning:  { dot: '#f97316', border: '#9a3412', bg: '#1a0f0a' },
-            critical: { dot: '#ef4444', border: '#991b1b', bg: '#1a0808' }
+            critical: { dot: '#ef4444', border: '#991b1b', bg: '#1a0808' },
+            offline:  { dot: '#94a3b8', border: '#334155', bg: '#0c131d' }
           };
           if (alerts.model_status === 'accumulating') {
             subtitle.textContent = '';
@@ -567,7 +568,7 @@
             return;
           }
           var machines = alerts.machines || [];
-          var flagged = machines.filter(function(m) { return m.status === 'critical' || m.status === 'warning'; });
+          var flagged = machines.filter(function(m) { return m.status === 'offline' || m.status === 'critical' || m.status === 'warning'; });
           subtitle.textContent = flagged.length === 0 ? 'All ' + machines.length + ' machines operating normally' : '\u26A0\uFE0F ' + flagged.length + ' machine(s) need attention';
           container.innerHTML = '';
           machines.forEach(function(m) {

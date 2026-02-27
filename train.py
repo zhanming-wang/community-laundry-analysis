@@ -3,26 +3,28 @@ import numpy as np
 import json
 import os
 import pickle
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.metrics import classification_report
 
 LAX = ZoneInfo("America/Los_Angeles")
 
-MACHINES_FILE   = "data/machines_log.csv"
-MODEL_FILE      = "models/isolation_forest.pkl"
-ALERTS_FILE     = "docs/alerts.json"
-PICKUP_FILE     = "docs/pickup_rates.json"
-MIN_ROWS        = 500  # ~3-4 days of data before training is meaningful
+MACHINES_FILE = "data/machines_log.csv"
+MODEL_FILE    = "models/random_forest.pkl"
+ALERTS_FILE   = "docs/alerts.json"
+PICKUP_FILE   = "docs/pickup_rates.json"
+MIN_ROWS      = 500  # ~3-4 days of data before training is meaningful
 
-MODE_MAP = {"idle": 0, "running": 1, "pressStart": 2, "paused": 3}
+MODE_MAP       = {"idle": 0, "running": 1, "pressStart": 2, "paused": 3, "offline": 4}
 CONTROLLER_MAP = {"ACA": 0, "QPRO": 1}
-TYPE_MAP = {"washer": 0, "dryer": 1}
+TYPE_MAP       = {"washer": 0, "dryer": 1}
+
 
 def engineer_features(df):
     df = df.sort_values(["opaque_id", "timestamp"]).copy()
 
-    # Most important feature: how many consecutive polls in the same mode
     df["prev_mode"] = df.groupby("opaque_id")["mode"].shift(1)
     df["mode_changed"] = (df["mode"] != df["prev_mode"]).astype(int)
     df["mode_change_group"] = df.groupby("opaque_id")["mode_changed"].cumsum()
@@ -30,37 +32,102 @@ def engineer_features(df):
         ["opaque_id", "mode_change_group"]
     ).cumcount()
 
-    # Approximate hours stuck in current mode (polls * 0.5 hours)
+    # Hours stuck in current mode (each poll ≈ 30 min = 0.5h)
     df["hours_in_current_mode"] = df["consecutive_same_mode"] * 0.5
 
-    # Encode categoricals for sklearn
-    df["mode_encoded"]       = df["mode"].map(MODE_MAP).fillna(-1)
-    df["controller_encoded"] = df["controller_type"].map(CONTROLLER_MAP).fillna(-1)
-    df["type_encoded"]       = df["machine_type"].map(TYPE_MAP).fillna(-1)
+    # Rolling 12-poll (6h) window: how often was this machine missing?
+    df["was_missing"] = df.get("was_missing", pd.Series(0, index=df.index)).fillna(0).astype(int)
+    df["missing_rate_6h"] = (
+        df.groupby("opaque_id")["was_missing"]
+        .transform(lambda x: x.shift(1).rolling(12, min_periods=1).mean())
+        .fillna(0)
+    )
+
+    # How often has the machine been flapping (appearing/disappearing)?
+    df["prev_missing"] = df.groupby("opaque_id")["was_missing"].shift(1).fillna(0)
+    df["state_flap"] = (df["was_missing"] != df["prev_missing"]).astype(int)
+    df["flap_rate_6h"] = (
+        df.groupby("opaque_id")["state_flap"]
+        .transform(lambda x: x.shift(1).rolling(12, min_periods=1).mean())
+        .fillna(0)
+    )
+
+    df["mode_encoded"]       = df["mode"].map(MODE_MAP).fillna(-1).astype(int)
+    df["controller_encoded"] = df["controller_type"].map(CONTROLLER_MAP).fillna(-1).astype(int)
+    df["type_encoded"]       = df["machine_type"].map(TYPE_MAP).fillna(-1).astype(int)
+    df["has_unavail_reason"] = (df["not_available_reason"].fillna("").str.len() > 0).astype(int)
 
     return df
 
+
+# ✅ Behavioral signals, encoded categories, engineered temporal features
+# ❌ Excluded: opaque_id, sticker, license_plate, nfc_id, qr_code_id, timestamp,
+#    display, group_id, soil, cycle, washer_temp, dryer_temp, show_settings, minute, poll_type
 FEATURE_COLS = [
     "available",
     "mode_encoded",
     "time_remaining",
     "door_closed",
     "in_service",
+    "has_unavail_reason",
+    "can_add_time",
+    "free_play",
     "consecutive_same_mode",
     "hours_in_current_mode",
-    "controller_encoded",
+    "missing_rate_6h",
+    "flap_rate_6h",
     "type_encoded",
+    "controller_encoded",
     "hour_pst",
     "day_of_week",
-    "can_add_time",
 ]
 
+
+def generate_labels(df):
+    """
+    Supervised binary labels: 0 = normal, 1 = anomaly.
+    Derived from known ground truth, not statistical inference.
+
+    Priority order (higher wins):
+      1. was_missing         — absent from API (highest confidence)
+      2. stuck running       — running > 2h (normal max ~1h)
+      3. pressStart stuck    — waiting > 1.5h (interrupted cycle)
+      4. running, timer = 0  — sensor may be stuck
+    """
+    labels = pd.Series(0, index=df.index)
+
+    if "was_missing" in df.columns:
+        labels[df["was_missing"] == 1] = 1
+
+    stuck_running = (
+        (df["mode"] == "running") &
+        (df["hours_in_current_mode"] >= 2.0)
+    )
+    labels[stuck_running] = 1
+
+    stuck_press_start = (
+        (df["mode"] == "pressStart") &
+        (df["hours_in_current_mode"] >= 1.5)
+    )
+    labels[stuck_press_start] = 1
+
+    running_no_timer = (
+        (df["mode"] == "running") &
+        (df["time_remaining"] == 0) &
+        (df["hours_in_current_mode"] >= 1.0)
+    )
+    labels[running_no_timer] = 1
+
+    return labels
+
+
 def explain(row):
-    """Plain English explanation for community manager."""
+    """Plain-English explanation for community manager."""
+    if row.get("was_missing", 0) == 1:
+        return "Machine absent from API response — not communicating with CSC system."
     mode  = row["mode"]
     hours = float(row["hours_in_current_mode"])
     score = float(row["anomaly_score"])
-
     if mode == "running" and hours >= 2.0:
         return f"Running continuously for {hours:.1f}h — normal max is ~1h. May be stuck."
     if mode == "pressStart" and hours >= 1.5:
@@ -73,8 +140,9 @@ def explain(row):
         return "Running with door open — unusual state."
     return f"Unusual combination of states (score: {score:.2f}). Worth a visual check."
 
+
 def read_machines_csv(path):
-    """Read machines_log.csv; tolerate 26-col header with some 27-col rows (poll_type added mid-run)."""
+    """Read machines_log.csv; tolerates 26-col header with some 27-col rows (poll_type added mid-run)."""
     import csv
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
@@ -86,9 +154,9 @@ def read_machines_csv(path):
             if len(row) == len(header):
                 rows.append(row)
     df = pd.DataFrame(rows, columns=header)
-    # Coerce numeric columns (all come in as str from csv.reader)
     for col in ("hour_pst", "minute", "day_of_week", "sticker", "available", "time_remaining",
-                "door_closed", "in_service", "free_play", "can_add_time", "show_settings"):
+                "door_closed", "in_service", "free_play", "can_add_time", "show_settings",
+                "was_missing"):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
     return df
@@ -117,23 +185,44 @@ def main():
         return
 
     df = engineer_features(df)
-    X  = df[FEATURE_COLS].fillna(0)
+    X = df[FEATURE_COLS].fillna(0)
 
-    # Train Isolation Forest
-    model = IsolationForest(
+    df["label"] = generate_labels(df)
+    y = df["label"]
+
+    n_anomaly = int(y.sum())
+    n_normal  = int((y == 0).sum())
+    print(f"Label distribution: {n_normal} normal, {n_anomaly} anomaly rows")
+
+    if n_anomaly < 5:
+        print("Not enough anomaly labels yet for supervised training — need at least 5.")
+        print("Tip: Check that manifest has stabilized and was_missing rows are being logged.")
+        write_empty_alerts("Collecting anomaly labels — need more offline/stuck events.")
+        return
+
+    model = RandomForestClassifier(
         n_estimators=200,
-        contamination=0.05,
+        max_depth=8,
+        min_samples_leaf=5,
+        class_weight="balanced",
         random_state=42,
-        n_jobs=-1
+        n_jobs=-1,
     )
-    model.fit(X)
-    df["raw_score"] = model.decision_function(X)
 
-    # Normalize: higher score = more anomalous (0 to 1)
-    inv = -df["raw_score"]
-    df["anomaly_score"] = (inv - inv.min()) / (inv.max() - inv.min() + 1e-9)
+    if n_anomaly >= 10:
+        cv = StratifiedKFold(n_splits=min(5, n_anomaly), shuffle=True, random_state=42)
+        cv_results = cross_validate(
+            model, X, y, cv=cv,
+            scoring=["precision_macro", "recall_macro", "f1_macro"],
+            error_score="raise"
+        )
+        print(f"CV Precision: {cv_results['test_precision_macro'].mean():.2f} "
+              f"Recall: {cv_results['test_recall_macro'].mean():.2f} "
+              f"F1: {cv_results['test_f1_macro'].mean():.2f}")
 
-    # Get most recent row per machine (current state)
+    model.fit(X, y)
+    df["anomaly_score"] = model.predict_proba(X)[:, 1]
+
     latest = (
         df.sort_values("timestamp")
         .groupby("opaque_id")
@@ -145,11 +234,13 @@ def main():
     for _, row in latest.iterrows():
         score = float(row["anomaly_score"])
 
-        if score > 0.75:
+        if row.get("was_missing", 0) == 1:
+            status = "offline"
+        elif score >= 0.70:
             status = "critical"
-        elif score > 0.55:
+        elif score >= 0.45:
             status = "warning"
-        elif score > 0.35:
+        elif score >= 0.25:
             status = "watch"
         else:
             status = "normal"
@@ -165,21 +256,25 @@ def main():
             "in_service":            bool(row["in_service"]),
             "hours_in_current_mode": round(float(row["hours_in_current_mode"]), 1),
             "anomaly_score":         round(score, 3),
+            "was_missing":           int(row.get("was_missing", 0)),
             "status":                status,
             "reason":                explain(row) if status != "normal" else "Operating normally",
             "last_seen":             str(row["timestamp"]),
         })
 
-    # Sort: critical → warning → watch → normal, then by sticker number
-    order = {"critical": 0, "warning": 1, "watch": 2, "normal": 3}
+    order = {"offline": 0, "critical": 1, "warning": 2, "watch": 3, "normal": 4}
     machines_out.sort(key=lambda x: (order[x["status"]], x["sticker"]))
 
     alerts = {
-        "trained_at":   datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S"),
-        "total_rows":   total_rows,
-        "model_status": "ok",
-        "message":      None,
-        "machines":     machines_out,
+        "trained_at":         datetime.now(LAX).strftime("%Y-%m-%d %H:%M:%S"),
+        "total_rows":         total_rows,
+        "model_status":       "ok",
+        "model_type":         "RandomForestClassifier",
+        "n_anomaly_labels":   n_anomaly,
+        "n_normal_labels":    n_normal,
+        "feature_cols":       FEATURE_COLS,
+        "message":            None,
+        "machines":           machines_out,
     }
 
     os.makedirs("docs", exist_ok=True)
@@ -190,7 +285,7 @@ def main():
     with open(MODEL_FILE, "wb") as f:
         pickle.dump(model, f)
 
-    flagged = [m for m in machines_out if m["status"] in ("critical", "warning")]
+    flagged = [m for m in machines_out if m["status"] in ("offline", "critical", "warning")]
     print(f"Done. Trained on {total_rows} rows. {len(flagged)} machine(s) flagged.")
     for m in flagged:
         print(f"  [{m['status'].upper()}] {m['machine_type']} #{m['sticker']}: {m['reason']}")
@@ -213,7 +308,6 @@ def compute_pickup_rates(df):
     if washers.empty:
         return {}
     washers = washers.sort_values(["opaque_id", "timestamp"])
-    # events: (day_of_week, hour_pst, stranded)
     events = []
     for opaque_id, grp in washers.groupby("opaque_id"):
         grp = grp.reset_index(drop=True)
