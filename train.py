@@ -245,18 +245,13 @@ def main():
     latest = df_sorted.groupby("opaque_id").last().reset_index()
 
     # Second-to-last row per machine for consecutive-poll confirmation gate (RC4)
-    def nth_last(g, n):
-        return g.iloc[-n] if len(g) >= n else g.iloc[0]
-
-    second_latest = (
-        df_sorted.groupby("opaque_id")
-        .apply(lambda g: nth_last(g, 2))
-        .reset_index(drop=True)
-    )
-    second_latest["anomaly_score"] = model.predict_proba(
-        second_latest[FEATURE_COLS].fillna(0)
-    )[:, 1]
-    prev_score_by_id = dict(zip(second_latest["opaque_id"], second_latest["anomaly_score"]))
+    # .nth(-2) keeps opaque_id as index; reset_index() promotes it back to a column
+    second_latest = df_sorted.groupby("opaque_id").nth(-2).reset_index()
+    if "opaque_id" not in second_latest.columns:
+        # Fallback: only 1 poll per machine — use the same row as latest
+        second_latest = latest.copy()
+    second_latest_scores = model.predict_proba(second_latest[FEATURE_COLS].fillna(0))[:, 1]
+    prev_score_by_id = dict(zip(second_latest["opaque_id"], second_latest_scores))
 
     machines_out = []
     for _, row in latest.iterrows():
