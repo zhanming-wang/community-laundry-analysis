@@ -1,0 +1,33 @@
+{
+  "trained_at": "2026-02-26 18:58:42",
+  "total_rows": 1273,
+  "n_anomaly_labels": 135,
+  "n_normal_labels": 1138,
+  "precision_target": "high_precision_low_fp",
+  "class_weight": "0:1, 1:5",
+  "watch_threshold": 0.5,
+  "warning_threshold": 0.7,
+  "critical_threshold": 0.85,
+  "confirmation_required_polls": 2,
+  "feature_cols": [
+    "available",
+    "mode_encoded",
+    "time_remaining",
+    "door_closed",
+    "in_service",
+    "has_unavail_reason",
+    "free_play",
+    "consecutive_same_mode",
+    "hours_in_current_mode",
+    "missing_rate_6h",
+    "flap_rate_6h",
+    "type_encoded",
+    "controller_encoded",
+    "hour_pst",
+    "day_of_week"
+  ],
+  "cv_precision_macro": 0.99,
+  "cv_recall_macro": 0.999,
+  "cv_f1_macro": 0.994,
+  "cv_average_precision": 1.0
+}
