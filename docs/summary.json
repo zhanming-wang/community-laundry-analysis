@@ -1,19 +1,19 @@
 {
-  "last_updated": "2026-03-02 21:57:32",
+  "last_updated": "2026-03-02 22:50:50",
   "current": {
     "washers_free": 8,
-    "minute": 57,
+    "minute": 50,
     "washers_in_use": 0,
     "washers_total": 8,
-    "dryers_free": 10,
-    "dryers_in_use": 0,
+    "dryers_free": 3,
+    "dryers_in_use": 7,
     "dryers_total": 10,
-    "all_free": 18,
-    "all_in_use": 0,
+    "all_free": 11,
+    "all_in_use": 7,
     "all_total": 18,
     "washer_utilization": 0.0,
-    "dryer_utilization": 0.0,
-    "overall_utilization": 0.0
+    "dryer_utilization": 70.0,
+    "overall_utilization": 38.9
   },
   "history": [
     {
@@ -5631,6 +5631,24 @@
       "washer_utilization": 0.0,
       "dryer_utilization": 0.0,
       "overall_utilization": 0.0
+    },
+    {
+      "timestamp": "2026-03-02 22:50:50",
+      "hour_pst": 22,
+      "minute": 50,
+      "day_of_week": 0,
+      "washers_free": 8,
+      "washers_in_use": 0,
+      "washers_total": 8,
+      "dryers_free": 3,
+      "dryers_in_use": 7,
+      "dryers_total": 10,
+      "all_free": 11,
+      "all_in_use": 7,
+      "all_total": 18,
+      "washer_utilization": 0.0,
+      "dryer_utilization": 70.0,
+      "overall_utilization": 38.9
     }
   ]
 }
